@@ -1,0 +1,32 @@
+paths:
+  /mangas:
+    get:
+      tags:
+        - Mangas
+      summary: Barcha mangalarni olish
+      responses:
+        200:
+          description: OK
+
+    post:
+      tags:
+        - Mangas
+      summary: Yangi manga yaratish
+      responses:
+        201:
+          description: Created
+
+  /mangas/{id}:
+    get:
+      tags:
+        - Mangas
+      summary: ID bo‘yicha manga
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: OK

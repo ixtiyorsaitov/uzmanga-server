@@ -1,0 +1,6 @@
+tags:
+  - name: Auth
+    description: Autentifikatsiya va ro'yxatdan o'tish
+
+  - name: Mangas
+    description: Manga bilan bog‘liq endpointlar

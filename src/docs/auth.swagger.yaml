@@ -1,0 +1,18 @@
+paths:
+  /login:
+    post:
+      tags:
+        - Auth
+      summary: Login
+      responses:
+        200:
+          description: Login muvaffaqiyatli
+
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Register
+      responses:
+        201:
+          description: Ro'yxatdan o'tildi
