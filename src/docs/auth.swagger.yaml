@@ -1,18 +1,47 @@
+openapi: 3.0.0
+info:
+  title: UzManga Auth API
+  version: 1.0.0
+
 paths:
-  /login:
+  /auth/google:
     post:
       tags:
         - Auth
-      summary: Login
+      summary: Google orqali tizimga kirish (Google Login)
+      description: |
+        Frontend Google SDK orqali olgan `id_token`ni yuboradi. 
+        Backend tokenni verify qiladi va JWT qaytaradi.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idToken
+              properties:
+                idToken:
+                  type: string
+                  description: Google-dan olingan Identity Token
+                  example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
       responses:
         200:
           description: Login muvaffaqiyatli
-
-  /register:
-    post:
-      tags:
-        - Auth
-      summary: Register
-      responses:
-        201:
-          description: Ro'yxatdan o'tildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    description: API uchun JWT Access Token
+                  user:
+                    $ref: "#/components/schemas/User"
+        401:
+          description: Token yaroqsiz yoki muddati o'tgan
+        500:
+          description: Server xatosi

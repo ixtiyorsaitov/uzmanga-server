@@ -1,0 +1,28 @@
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 100001
+        username:
+          type: string
+          example: "Ali Valiyev"
+        email:
+          type: string
+          format: email
+          example: "ali@gmail.com"
+        avatar:
+          type: string
+          example: "https://lh3.googleusercontent.com/a/..."
+        role:
+          type: string
+          enum: [user, admin]
+          example: user
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

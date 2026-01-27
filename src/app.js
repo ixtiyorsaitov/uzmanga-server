@@ -5,6 +5,9 @@ const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
 const errorHandler = require("./middlewares/errorHandler");
+const passport = require("passport");
+const session = require("cookie-session");
+require("./config/passport"); // Passport sozlamalari
 
 const mangaRoutes = require("./routes/mangaRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -17,6 +20,14 @@ app.use(cors()); // Cross-Origin Resource Sharing
 app.use(morgan("dev")); // Log requests
 app.use(express.json()); // Read JSON data
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  session({
+    maxAge: 24 * 60 * 60 * 1000, // 1 kun
+    keys: [process.env.SESSION_KEY],
+  }),
+);
+app.use(passport.initialize());
+app.use(passport.session());
 // app.use("/uploads", express.static("uploads")); // Static images
 
 // --- Swagger UI ---
