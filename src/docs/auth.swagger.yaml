@@ -1,47 +1,87 @@
 openapi: 3.0.0
+
 info:
   title: UzManga Auth API
   version: 1.0.0
+  description: Google OAuth 2.0 orqali autentifikatsiya
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
 
 paths:
-  /auth/google:
+  /api/v1/auth/google:
     post:
       tags:
         - Auth
-      summary: Google orqali tizimga kirish (Google Login)
+      summary: Google OAuth login boshlash
       description: |
-        Frontend Google SDK orqali olgan `id_token`ni yuboradi. 
-        Backend tokenni verify qiladi va JWT qaytaradi.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - idToken
-              properties:
-                idToken:
-                  type: string
-                  description: Google-dan olingan Identity Token
-                  example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+        Google OAuth 2.0 login jarayonini boshlaydi.
+        Backend Google authorization URL qaytaradi,
+        frontend shu URL'ga redirect qiladi.
       responses:
         200:
-          description: Login muvaffaqiyatli
+          description: Google authorization URL
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-                  token:
+                  url:
                     type: string
-                    description: API uchun JWT Access Token
-                  user:
-                    $ref: "#/components/schemas/User"
-        401:
-          description: Token yaroqsiz yoki muddati o'tgan
+                    format: uri
+                    example: https://accounts.google.com/o/oauth2/v2/auth?client_id=...
+
+  /api/v1/auth:
+    get:
+      tags:
+        - Auth
+      summary: Google OAuth callback
+      description: |
+        Google tomonidan redirect qilinadigan callback endpoint.
+        `code` query param orqali keladi.
+        Backend code'ni tokenlarga almashtiradi,
+        user ma'lumotlarini olib login qiladi.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Google OAuth authorization code
+          schema:
+            type: string
+            example: 4/0ASc3gC1abcXYZ
+      responses:
+        302:
+          description: Login muvaffaqiyatli, frontendga redirect
+          headers:
+            Location:
+              schema:
+                type: string
+                example: http://localhost:3000/
+        400:
+          description: Authorization code yuborilmagan
         500:
-          description: Server xatosi
+          description: Google authentication failed
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64f1c0c9b7a12e001234abcd
+        email:
+          type: string
+          example: user@gmail.com
+        name:
+          type: string
+          example: John Doe
+        avatar:
+          type: string
+          example: https://lh3.googleusercontent.com/a/AAcHTte...
+        provider:
+          type: string
+          example: google
+        role:
+          type: string

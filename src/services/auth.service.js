@@ -1,5 +1,7 @@
 const { google } = require("googleapis");
 const createOAuthClient = require("../utils/oauthClient");
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 const getGoogleAuthUrl = () => {
   const client = createOAuthClient();
@@ -24,6 +26,8 @@ const getGoogleUser = async (code) => {
 
   return data;
 };
+
+
 
 module.exports = {
   getGoogleAuthUrl,

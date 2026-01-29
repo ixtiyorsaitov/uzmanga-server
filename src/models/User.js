@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
 
     provider: {
       type: String,
-      enum: ["local", "google"],
+      enum: ["telegram", "google"],
       required: true,
     },
 
@@ -40,10 +40,13 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+userSchema.pre("save", async function () {
+  // Agar parol o'zgarmagan bo'lsa yoki parol kiritilmagan bo'lsa (Google login holati)
+  if (!this.isModified("password") || !this.password) {
+    return;
+  }
+
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 userSchema.methods.correctPassword = async function (

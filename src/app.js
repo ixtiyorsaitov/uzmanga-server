@@ -12,11 +12,30 @@ require("./config/passport"); // Passport sozlamalari
 const mangaRoutes = require("./routes/mangaRoutes");
 const authRoutes = require("./routes/authRoutes");
 
+const allowedOrigins = [
+  "https://uzmanga-auth.vercel.app",
+  "http://localhost:3000",
+];
+
 const app = express();
 
 // --- Middlewares ---
-app.use(helmet()); // Security headers
-app.use(cors()); // Cross-Origin Resource Sharing
+app.use(helmet());
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS siyosati tomonidan bloklandi"));
+      }
+    },
+    credentials: true, // Cookie o'tishi uchun shart!
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+// Cross-Origin Resource Sharing
 app.use(morgan("dev")); // Log requests
 app.use(express.json()); // Read JSON data
 app.use(express.urlencoded({ extended: true }));
