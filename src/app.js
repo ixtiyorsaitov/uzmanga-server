@@ -4,13 +4,12 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
-const errorHandler = require("./middlewares/errorHandler");
-const passport = require("passport");
-const session = require("cookie-session");
-require("./config/passport"); // Passport sozlamalari
+const errorHandler = require("./middlewares/error.handler.middleware");
+const cookieParser = require("cookie-parser");
+require("./config/passport");
 
-const mangaRoutes = require("./routes/mangaRoutes");
-const authRoutes = require("./routes/authRoutes");
+const mangaRoutes = require("./routes/manga.routes");
+const authRoutes = require("./routes/auth.routes");
 
 const allowedOrigins = [
   "https://uzmanga-auth.vercel.app",
@@ -21,6 +20,7 @@ const app = express();
 
 // --- Middlewares ---
 app.use(helmet());
+app.use(cookieParser());
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -30,24 +30,15 @@ app.use(
         callback(new Error("CORS siyosati tomonidan bloklandi"));
       }
     },
-    credentials: true, // Cookie o'tishi uchun shart!
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
-// Cross-Origin Resource Sharing
-app.use(morgan("dev")); // Log requests
-app.use(express.json()); // Read JSON data
+app.use(morgan("dev"));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  session({
-    maxAge: 24 * 60 * 60 * 1000, // 1 kun
-    keys: [process.env.SESSION_KEY],
-  }),
-);
-app.use(passport.initialize());
-app.use(passport.session());
-// app.use("/uploads", express.static("uploads")); // Static images
+app.use("/uploads", express.static("uploads")); // Static images
 
 // --- Swagger UI ---
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
