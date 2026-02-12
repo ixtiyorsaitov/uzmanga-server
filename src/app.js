@@ -10,10 +10,14 @@ require("./config/passport");
 
 const mangaRoutes = require("./routes/manga.routes");
 const authRoutes = require("./routes/auth.routes");
+const categoryRoutes = require("./routes/category.routes");
+const genreRoutes = require("./routes/genre.routes");
+const chapterRoutes = require("./routes/chapter.routes");
 
 const allowedOrigins = [
   "https://uzmanga-auth.vercel.app",
   "http://localhost:3000",
+  "http://localhost:5000",
 ];
 
 const app = express();
@@ -46,6 +50,9 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // --- API Routes ---
 app.use("/api/v1/mangas", mangaRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/categories", categoryRoutes);
+app.use("/api/v1/genres", genreRoutes);
+app.use("/api/v1/chapters", chapterRoutes);
 
 // --- Catch errors (404) ---
 app.use((req, res, next) => {

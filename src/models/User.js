@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: ["user", "admin", "publisher", "moderator"],
       default: "user",
     },
 
@@ -41,7 +41,6 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre("save", async function () {
-  // Agar parol o'zgarmagan bo'lsa yoki parol kiritilmagan bo'lsa (Google login holati)
   if (!this.isModified("password") || !this.password) {
     return;
   }

@@ -2,7 +2,7 @@ paths:
   /mangas:
     get:
       tags:
-        - Mangas
+        - User Mangas # Oddiy foydalanuvchilar uchun
       summary: Barcha mangalarni olish
       responses:
         200:
@@ -10,8 +10,8 @@ paths:
 
     post:
       tags:
-        - Mangas
-      summary: Yangi manga yaratish
+        - Admin Mangas # Adminlar uchun
+      summary: Yangi manga yaratish (Faqat Admin)
       responses:
         201:
           description: Created
@@ -19,8 +19,8 @@ paths:
   /mangas/{id}:
     get:
       tags:
-        - Mangas
-      summary: ID bo‘yicha manga
+        - User Mangas
+      summary: ID bo‘yicha manga olish
       parameters:
         - in: path
           name: id

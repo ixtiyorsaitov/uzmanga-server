@@ -1,19 +1,71 @@
 const jwt = require("jsonwebtoken");
 const ApiResponse = require("../utils/response");
+const User = require("../models/User"); 
 
 exports.protect = async (req, res, next) => {
   try {
-    const token = req.cookies.access_token;
-
-    if (!token) {
-      return ApiResponse.error(res, "Not authorized, no token", 401);
+    // 1. Tokenni olish (Cookie yoki Authorization Header orqali)
+    let token;
+    if (req.cookies && req.cookies.access_token) {
+      token = req.cookies.access_token;
+    } else if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
     }
 
+    if (!token) {
+      return ApiResponse.error(
+        res,
+        "Siz tizimga kirmagansiz. Iltimos, login qiling.",
+        401,
+      );
+    }
+
+    // 2. Tokenni tekshirish (Verify)
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+
+    // 3. Foydalanuvchi hali ham bazada bormi?
+    // (Senior darajada token borligi yetarli emas, foydalanuvchi o'chirilgan bo'lishi mumkin)
+    const currentUser = await User.findById(decoded.id);
+    if (!currentUser) {
+      return ApiResponse.error(
+        res,
+        "Ushbu token egasi bo'lgan foydalanuvchi tizimda mavjud emas.",
+        401,
+      );
+    }
+
+    // 4. Foydalanuvchini req obyektiga biriktirish
+    req.user = currentUser;
     next();
   } catch (error) {
-    console.error("Auth Middleware Error:", error);
-    return ApiResponse.error(res, "Not authorized, invalid token", 401);
+    if (error.name === "TokenExpiredError") {
+      return ApiResponse.error(
+        res,
+        "Token muddati tugagan. Iltimos, qayta kiring.",
+        401,
+      );
+    }
+    return ApiResponse.error(res, "Avtorizatsiyadan o'tib bo'lmadi.", 401);
   }
+};
+
+/**
+ * Rollarni tekshirish (Admin, Moderator va h.k.)
+ * @param  {...string} roles - Ruxsat berilgan rollar ro'yxati
+ */
+exports.restrictTo = (...roles) => {
+  return (req, res, next) => {
+    // req.user protect middleware'dan keladi
+    if (!roles.includes(req.user.role)) {
+      return ApiResponse.error(
+        res,
+        `Sizda ushbu amalni bajarish uchun ruxsat yo'q (Roli: ${req.user.role})`,
+        403,
+      );
+    }
+    next();
+  };
 };
