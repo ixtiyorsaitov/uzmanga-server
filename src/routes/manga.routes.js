@@ -12,7 +12,7 @@ router.get("/", mangaController.getAllMangas);
 router.get("/type", mangaController.getAllMangaTypes);
 
 // Get manga by id
-router.get("/:id", mangaController.getMangaById);
+router.get("/:id", mangaController.getManga);
 
 // Get manga chapters
 router.get("/:id/chapters", mangaController.getMangaChapters);

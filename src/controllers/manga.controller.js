@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Manga = require("../models/Manga");
 const Media = require("../models/Media");
 const MangaType = require("../models/MangaType");
@@ -379,14 +380,24 @@ exports.getAllMangas = async (req, res, next) => {
   }
 };
 
-exports.getMangaById = async (req, res, next) => {
+exports.getManga = async (req, res, next) => {
   try {
-    const mangaRaw = await Manga.findById(req.params.id)
+    const { id: identifier } = req.params;
+
+    const isId = mongoose.Types.ObjectId.isValid(identifier);
+
+    const query = isId
+      ? Manga.findById(identifier)
+      : Manga.findOne({ slug: identifier });
+
+    const mangaRaw = await query
       .populate({
         path: "images.cover images.banner",
         select: "url type -_id",
       })
       .populate("type", "name -_id")
+      .populate("categories")
+      .populate("genres")
       .lean();
 
     if (!mangaRaw) {
@@ -434,15 +445,56 @@ exports.getMangaChapters = async (req, res, next) => {
   try {
     const { id: mangaId } = req.params;
 
-    const chapters = await Chapter.find({ manga: mangaId })
-      .populate({
-        path: "pages",
-        select: "url type -_id",
-      })
-      .sort({ chapterNumber: 1 })
+    let { page = 1, limit = 10, search = "", ordering = "-index" } = req.query;
+
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    const query = { manga: mangaId };
+
+    if (search) {
+      const searchNumber = parseFloat(search);
+
+      query.$or = [{ title: { $regex: search, $options: "i" } }];
+
+      if (!isNaN(searchNumber)) {
+        query.$or.push({ chapterNumber: searchNumber });
+      }
+    }
+
+    let sortQuery;
+    if (ordering === "index") {
+      sortQuery = { volumeNumber: 1, chapterNumber: 1 };
+    } else if (ordering === "-index") {
+      sortQuery = { volumeNumber: -1, chapterNumber: -1 };
+    } else {
+      sortQuery = ordering;
+    }
+
+    const chapters = await Chapter.find(query)
+      .select("-disableComments -createdAt -updatedAt -manga -pages -__v")
+      .populate("createdBy", "name")
+      .sort(sortQuery)
+      .skip((page - 1) * limit)
+      .limit(limit)
       .lean();
 
-    return ApiResponse.success(res, chapters, "Boblar olindi", 200);
+    const totalChapters = await Chapter.countDocuments(query);
+
+    return ApiResponse.success(
+      res,
+      {
+        chapters,
+        pagination: {
+          total: totalChapters,
+          page,
+          limit,
+          totalPages: Math.ceil(totalChapters / limit),
+        },
+      },
+      "Boblar muvaffaqiyatli olindi",
+      200,
+    );
   } catch (error) {
     next(error);
   }
@@ -451,6 +503,13 @@ exports.getMangaChapters = async (req, res, next) => {
 exports.getChapterById = async (req, res, next) => {
   try {
     const { id: mangaId, chapterId } = req.params;
+
+    const isMangaId = mongoose.Types.ObjectId.isValid(mangaId);
+    const isChapterId = mongoose.Types.ObjectId.isValid(chapterId);
+
+    if (!isMangaId || !isChapterId) {
+      return ApiResponse.error(res, "Manga yoki bob ID si noto'g'ri", 400);
+    }
 
     const chapter = await Chapter.findOne({ manga: mangaId, _id: chapterId })
       .populate({
@@ -482,10 +541,10 @@ exports.createChapter = async (req, res, next) => {
     } = req.body;
     const requestUser = "697b6fc624523752fdca8081";
 
-    if (!title || !chapterNumber) {
+    if (!chapterNumber) {
       return ApiResponse.error(
         res,
-        "Barcha ma'lumotlar kiritilishi shart",
+        "Bob raqami kiritilishi shart",
         400,
       );
     }

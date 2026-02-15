@@ -4,9 +4,9 @@ const router = express.Router();
 const { protect, restrictTo } = require("../middlewares/auth.middleware");
 const upload = require("../middlewares/upload.middleware");
 
-// Get all chapters
-router.get("/", (req, res) => {
-  return res.json({ message: "Chapters" });
-});
+const chapterController = require("../controllers/chapter.controller");
+
+// Get chapter by id
+router.get("/:id", chapterController.getChapterById);
 
 module.exports = router;

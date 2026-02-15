@@ -8,7 +8,7 @@ const chapterSchema = new Schema(
       ref: "Manga",
       required: true,
     },
-    title: { type: String, required: [true, "Bob nomi shart"] },
+    title: { type: String },
     isLocked: { type: Boolean, default: false },
     price: {
       type: Number,
@@ -36,7 +36,7 @@ const chapterSchema = new Schema(
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: [true, "Yaratuvchi shart"],
     },
     publishedAt: {
       type: Date,
