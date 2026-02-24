@@ -6,6 +6,7 @@ const genreSchema = new mongoose.Schema(
       type: String,
       required: [true, "Janr nomi bo'lishi shart"],
       trim: true,
+      unique: true,
     },
   },
   { timestamps: true },

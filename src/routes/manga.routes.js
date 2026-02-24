@@ -3,30 +3,22 @@ const router = express.Router();
 
 const { protect, restrictTo } = require("../middlewares/auth.middleware");
 const mangaController = require("../controllers/manga.controller");
+const chapterController = require("../controllers/chapter.controller"); // Ajratilgan controller
 const upload = require("../middlewares/upload.middleware");
 
-// Get all mangas
+// --- PUBLIC ROUTES ---
 router.get("/", mangaController.getAllMangas);
-
-// Get all manga types
 router.get("/type", mangaController.getAllMangaTypes);
-
-// Get manga by id
 router.get("/:id", mangaController.getManga);
 
-// Get manga chapters
-router.get("/:id/chapters", mangaController.getMangaChapters);
+// --- PROTECTED ROUTES (Admin & Publisher) ---
 
-// Get chapter by id
-router.get("/:id/chapters/:chapterId", mangaController.getChapterById);
-
-// Create manga type
+// Manga turi
 router.post("/type", mangaController.createMangaType);
-// Create manga
+
+// Manga boshqaruvi
 router.post(
   "/",
-  //   protect,
-  //   restrictTo("admin", "publisher"),
   upload.fields([
     { name: "cover", maxCount: 1 },
     { name: "banner", maxCount: 1 },
@@ -34,18 +26,8 @@ router.post(
   mangaController.createManga,
 );
 
-// Create chapter
-router.post(
-  "/:id/chapters",
-  upload.fields([{ name: "pages", maxCount: 100 }]),
-  mangaController.createChapter,
-);
-
-// Update manga
 router.put(
   "/:id",
-  //   protect,
-  //   restrictTo("admin", "publisher"),
   upload.fields([
     { name: "cover", maxCount: 1 },
     { name: "banner", maxCount: 1 },
@@ -53,15 +35,6 @@ router.put(
   mangaController.updateManga,
 );
 
-// Delete manga
 router.delete("/:id", mangaController.deleteManga);
-
-// Delete chapter
-router.delete(
-  "/:id/chapters/:chapterId",
-  //   protect,
-  //   restrictTo("admin", "publisher"),
-  mangaController.deleteChapter,
-);
 
 module.exports = router;

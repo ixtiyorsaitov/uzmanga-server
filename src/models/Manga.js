@@ -22,20 +22,21 @@ const mangaSchema = new mongoose.Schema(
       required: [true, "Manga slagi bo'lishi shart"],
       unique: true,
     },
-    ageRating: { type: String, enum: ["all", "16+", "18+"], default: "all" },
+    ageRating: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AgeRating",
+    },
     releaseYear: {
       type: Number,
       required: [true, "Manga yili bo'lishi shart"],
     },
     status: {
-      type: String,
-      enum: ["ongoing", "completed", "hiatus"],
-      default: "ongoing",
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MangaStatus",
     },
     translationStatus: {
-      type: String,
-      enum: ["translating", "finished", "dropped"],
-      default: "translating",
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TranslationStatus",
     },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     genres: [{ type: mongoose.Schema.Types.ObjectId, ref: "Genre" }],

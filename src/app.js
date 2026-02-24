@@ -13,6 +13,10 @@ const authRoutes = require("./routes/auth.routes");
 const categoryRoutes = require("./routes/category.routes");
 const genreRoutes = require("./routes/genre.routes");
 const chapterRoutes = require("./routes/chapter.routes");
+const mangaStatusRoutes = require("./routes/manga.status.routes");
+const translationStatusRoutes = require("./routes/translation.status.routes");
+const ageRatingRoutes = require("./routes/age.rating.routes");
+const mangaTypesRoutes = require("./routes/manga.types.routes");
 
 const allowedOrigins = [
   "https://uzmanga-auth.vercel.app",
@@ -53,6 +57,10 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/genres", genreRoutes);
 app.use("/api/v1/chapters", chapterRoutes);
+app.use("/api/v1/manga-statuses", mangaStatusRoutes);
+app.use("/api/v1/translation-statuses", translationStatusRoutes);
+app.use("/api/v1/age-ratings", ageRatingRoutes);
+app.use("/api/v1/manga-types", mangaTypesRoutes);
 
 // --- Catch errors (404) ---
 app.use((req, res, next) => {

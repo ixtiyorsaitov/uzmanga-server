@@ -6,6 +6,7 @@ const categorySchema = new mongoose.Schema(
       type: String,
       required: [true, "Kategoriya nomi bo'lishi shart"],
       trim: true,
+      unique: true,
     },
   },
   { timestamps: true },

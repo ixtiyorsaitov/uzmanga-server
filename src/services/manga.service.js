@@ -1,0 +1,90 @@
+const Media = require("../models/Media");
+const { uploadService, uploadFolders } = require("./upload.service");
+
+exports.uploadMangaAssets = async (mangaId, files) => {
+  const [coverUpload, bannerUpload] = await Promise.all([
+    uploadService.uploadToStorage(
+      files.cover[0],
+      uploadFolders.MANGA_ASSETS.bucket,
+      uploadFolders.MANGA_ASSETS.folders.MANGA_COVERS,
+    ),
+    uploadService.uploadToStorage(
+      files.banner[0],
+      uploadFolders.MANGA_ASSETS.bucket,
+      uploadFolders.MANGA_ASSETS.folders.MANGA_BANNERS,
+    ),
+  ]);
+
+  const [coverMedia, bannerMedia] = await Promise.all([
+    Media.create({
+      url: coverUpload.url,
+      path: coverUpload.path,
+      bucket: coverUpload.bucket,
+      type: "COVER",
+      refModel: "Manga",
+      refId: mangaId,
+    }),
+    Media.create({
+      url: bannerUpload.url,
+      path: bannerUpload.path,
+      bucket: bannerUpload.bucket,
+      type: "BANNER",
+      refModel: "Manga",
+      refId: mangaId,
+    }),
+  ]);
+
+  return { cover: coverMedia._id, banner: bannerMedia._id };
+};
+
+exports.updateMangaImage = async (manga, files, type) => {
+  const fieldName = type.toLowerCase();
+
+  if (files && files[fieldName]) {
+    const oldMedia = manga.images[fieldName];
+    if (oldMedia && oldMedia.path) {
+      await uploadService.deleteFromStorage(oldMedia.path);
+      await Media.findByIdAndDelete(oldMedia._id);
+    }
+
+    const folder = type === "COVER" ? "MANGA_COVERS" : "MANGA_BANNERS";
+    const upload = await uploadService.uploadToStorage(
+      files[fieldName][0],
+      uploadFolders.MANGA_ASSETS.bucket,
+      uploadFolders.MANGA_ASSETS.folders[folder],
+    );
+    const newMedia = await Media.create({
+      url: upload.url,
+      path: upload.path,
+      bucket: upload.bucket,
+      type: type,
+      refModel: "Manga",
+      refId: manga._id,
+    });
+
+    return newMedia._id;
+  }
+  return manga.images[fieldName]?._id;
+};
+
+exports.clearMangaAssets = async (manga) => {
+  const mediaIds = [];
+  const deletePromises = [];
+
+  const images = [manga.images?.cover, manga.images?.banner];
+
+  images.forEach((img) => {
+    if (img) {
+      mediaIds.push(img._id);
+      if (img.path) {
+        deletePromises.push(uploadService.deleteFromStorage(img.path));
+      }
+    }
+  });
+
+  if (mediaIds.length > 0) {
+    deletePromises.push(Media.deleteMany({ _id: { $in: mediaIds } }));
+  }
+
+  await Promise.all(deletePromises);
+};
