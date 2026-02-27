@@ -24,7 +24,8 @@ router.get("/single/:chapterId", chapterController.getChapterById);
 // Middlewarelarni guruhlash (Kodni toza saqlash uchun)
 const adminAuth = [protect, restrictTo("admin", "publisher")];
 
-router.route("/:mangaId").post(
+router.post(
+  "/:mangaId",
   // ...adminAuth, // Middlewarelarni bir joyda yoqing
   upload.fields([{ name: "pages", maxCount: 100 }]),
   chapterController.createChapter,

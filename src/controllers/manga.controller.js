@@ -2,7 +2,10 @@ const mongoose = require("mongoose");
 const Manga = require("../models/Manga");
 const Media = require("../models/Media");
 const MangaType = require("../models/MangaType");
+const MangaStatus = require("../models/MangaStatus");
+const TranslationStatus = require("../models/TranslationStatus");
 const Category = require("../models/Category");
+const AgeRating = require("../models/AgeRating");
 const Genre = require("../models/Genre");
 const Chapter = require("../models/Chapter");
 const mangaUtils = require("../utils/manga.utils");
@@ -12,66 +15,86 @@ const { uploadService, uploadFolders } = require("../services/upload.service");
 
 exports.createManga = async (req, res, next) => {
   try {
-    const {
+    // 1. FormData'dan ma'lumotlarni olish
+    // Eslatma: FormData hamma narsani string qilib yuboradi
+    let {
       title,
       categories,
       genres,
+      type,
+      ageRating,
+      status,
+      translationStatus,
+      releaseYear,
       slug: customSlug,
       ...mangaData
     } = req.body;
-    const requestUser = "698d9d3ab53d93cb767b9aba"; // req.user.id bo'lishi kerak
 
-    // 1. Slug yaratish va tekshirish
+    const requestUser = "698d9d3ab53d93cb767b9aba"; // req.user.id
+
+    // 2. String bo'lib kelgan massivlarni parse qilish (Agar kerak bo'lsa)
+    const parsedCategories =
+      typeof categories === "string" ? JSON.parse(categories) : categories;
+    const parsedGenres =
+      typeof genres === "string" ? JSON.parse(genres) : genres;
+
+    // 3. Slug tekshiruvi
     const finalSlug = mangaUtils.generateSlug(title, customSlug);
     const existingSlug = await Manga.findOne({ slug: finalSlug });
     if (existingSlug) {
-      return ApiResponse.error(
-        res,
-        "Ushbu slug band. Iltimos boshqa slug tanlang",
-        400,
-      );
+      return ApiResponse.error(res, "Ushbu slug band.", 400);
     }
 
-    // 2. Fayllar mavjudligini tekshirish
+    // 4. Fayllar (FormData orqali kelgan rasmllar)
     if (!req.files?.cover || !req.files?.banner) {
       return ApiResponse.error(res, "Cover va banner yuklanishi shart", 400);
     }
 
-    // 3. Kategoriya va janrlarni validatsiya qilish
-    const [categoryIds, genreIds] = await Promise.all([
-      mangaUtils.parseAndValidateIds(Category, categories),
-      mangaUtils.parseAndValidateIds(Genre, genres),
+    // 5. Validatsiya (Oldingi javobdagi mantiq)
+    const [
+      categoryIds,
+      genreIds,
+      validatedType,
+      validatedAge,
+      validatedStatus,
+      validatedTransStatus,
+    ] = await Promise.all([
+      mangaUtils.parseAndValidateIds(Category, parsedCategories),
+      mangaUtils.parseAndValidateIds(Genre, parsedGenres),
+      mangaUtils.checkExists(MangaType, type, "Manga turi"),
+      mangaUtils.checkExists(AgeRating, ageRating, "Yosh reytingi"),
+      mangaUtils.checkExists(MangaStatus, status, "Manga statusi"),
+      mangaUtils.checkExists(
+        TranslationStatus,
+        translationStatus,
+        "Tarjima statusi",
+      ),
     ]);
 
-    // 4. Manganing asosiy qismini yaratish
+    // 6. Saqlash
     const manga = await Manga.create({
       ...mangaData,
       title,
       slug: finalSlug,
+      type: validatedType,
+      ageRating: validatedAge,
+      status: validatedStatus,
+      translationStatus: validatedTransStatus,
       categories: categoryIds,
       genres: genreIds,
       createdBy: requestUser,
       publishers: [requestUser],
-      releaseYear: parseInt(mangaData.releaseYear),
+      releaseYear: parseInt(releaseYear), // FormData string qaytargani uchun parseint shart
     });
 
-    // 5. Rasmlarni yuklash va bog'lash (Service orqali)
+    // 7. Servis orqali rasmlarni yuklash
     const images = await mangaService.uploadMangaAssets(manga._id, req.files);
-
     manga.images = images;
     await manga.save();
 
-    return ApiResponse.success(
-      res,
-      manga,
-      "Manga muvaffaqiyatli yaratildi",
-      201,
-    );
+    return ApiResponse.success(res, manga, "Manga yaratildi", 201);
   } catch (error) {
-    // Utils'dan otilgan xatolarni tutib olish
-    if (error.message.includes("topilmadi")) {
-      return ApiResponse.error(res, error.message, 400);
-    }
+    console.log(error);
     next(error);
   }
 };
@@ -143,22 +166,25 @@ exports.deleteManga = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // 1. Mangani rasmlari bilan topamiz
     const manga = await Manga.findById(id).populate(
       "images.cover images.banner",
     );
-    if (!manga) return ApiResponse.error(res, "Manga topilmadi", 404);
 
-    // 2. Assetlarni (rasmlarni) service orqali parallel o'chiramiz
+    if (!manga) {
+      return ApiResponse.error(res, "Manga topilmadi", 404);
+    }
+    console.log(manga.images);
+
     await mangaService.clearMangaAssets(manga);
 
-    // 3. Mangani o'chiramiz
-    await manga.deleteOne(); // findByIdAndDelete o'rniga deleteOne ishlatsangiz hooklar yaxshi ishlaydi
+    await Manga.findByIdAndDelete(id);
+
+    await mangaService.clearMangaChapters(manga);
 
     return ApiResponse.success(
       res,
       null,
-      "Manga va unga tegishli fayllar o'chirildi",
+      "Manga va uning fayllari to'liq o'chirildi",
       200,
     );
   } catch (error) {

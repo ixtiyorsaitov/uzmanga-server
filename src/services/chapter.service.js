@@ -2,7 +2,6 @@ const Media = require("../models/Media");
 const { uploadService, uploadFolders } = require("./upload.service");
 
 exports.uploadChapterPages = async (mangaId, chapterNumber, files) => {
-  // 1. Storage'ga parallel yuklash
   const uploadPromises = files.map((file) =>
     uploadService.uploadToStorage(
       file,
@@ -12,7 +11,6 @@ exports.uploadChapterPages = async (mangaId, chapterNumber, files) => {
   );
   const uploadedFiles = await Promise.all(uploadPromises);
 
-  // 2. Media kolleksiyasida hujjatlarni parallel yaratish
   const mediaPromises = uploadedFiles.map((file) =>
     Media.create({
       url: file.url,
@@ -34,7 +32,6 @@ exports.linkPagesToChapter = async (pageIds, chapterId) => {
   );
 };
 
-// services/chapter.service.js ga qo'shing
 exports.deleteChapterAssets = async (chapter) => {
   if (!chapter.pages || chapter.pages.length === 0) return;
 
@@ -44,16 +41,17 @@ exports.deleteChapterAssets = async (chapter) => {
 
   const mediaIds = chapter.pages.map((page) => page._id);
 
-  const deletePromises = [Media.deleteMany({ _id: { $in: mediaIds } })];
-
-  if (storagePaths.length > 0) {
-    deletePromises.push(
-      uploadService.deleteFromStorage(
+  try {
+    if (storagePaths.length > 0) {
+      await uploadService.deleteFromStorage(
         storagePaths,
         uploadFolders.MANGA_CHAPTERS.bucket,
-      ),
-    );
-  }
+      );
+    }
 
-  await Promise.all(deletePromises);
+    await Media.deleteMany({ _id: { $in: mediaIds } });
+  } catch (error) {
+    console.error("Fayllarni o'chirishda xatolik:", error);
+    throw error;
+  }
 };

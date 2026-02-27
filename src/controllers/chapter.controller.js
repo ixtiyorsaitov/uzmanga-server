@@ -74,8 +74,11 @@ exports.getChapterById = async (req, res, next) => {
 };
 
 exports.createChapter = async (req, res, next) => {
+  console.log("Body:", req.body);
+  console.log("Files keys:", req.files ? Object.keys(req.files) : "No files");
+  console.log("Pages exist?:", !!req.files?.pages);
   try {
-    const { id: mangaId } = req.params;
+    const { mangaId } = req.params;
     const {
       title,
       chapterNumber,

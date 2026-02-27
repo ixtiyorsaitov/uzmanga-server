@@ -1,5 +1,7 @@
 const Media = require("../models/Media");
+const Chapter = require("../models/Chapter");
 const { uploadService, uploadFolders } = require("./upload.service");
+const chapterService = require("../services/chapter.service");
 
 exports.uploadMangaAssets = async (mangaId, files) => {
   const [coverUpload, bannerUpload] = await Promise.all([
@@ -77,7 +79,12 @@ exports.clearMangaAssets = async (manga) => {
     if (img) {
       mediaIds.push(img._id);
       if (img.path) {
-        deletePromises.push(uploadService.deleteFromStorage(img.path));
+        deletePromises.push(
+          uploadService.deleteFromStorage(
+            img.path,
+            uploadFolders.MANGA_ASSETS.bucket,
+          ),
+        );
       }
     }
   });
@@ -87,4 +94,16 @@ exports.clearMangaAssets = async (manga) => {
   }
 
   await Promise.all(deletePromises);
+};
+
+exports.clearMangaChapters = async (manga) => {
+  const chapters = await Chapter.find({ manga: manga._id }).populate("pages");
+
+  const chapterDeletePromises = chapters.map((chapter) =>
+    chapterService.deleteChapterAssets(chapter),
+  );
+
+  await Promise.all(chapterDeletePromises);
+
+  await Chapter.deleteMany({ manga: manga._id });
 };

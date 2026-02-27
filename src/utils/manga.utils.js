@@ -14,3 +14,12 @@ exports.parseAndValidateIds = async (Model, data) => {
   }
   return ids;
 };
+
+exports.checkExists = async (Model, id, label) => {
+  if (!id) return null; // Agar majburiy bo'lmasa null qaytaradi
+  const exists = await Model.findById(id);
+  if (!exists) {
+    throw new Error(`${label} topilmadi`);
+  }
+  return id;
+};
