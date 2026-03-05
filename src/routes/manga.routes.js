@@ -19,6 +19,8 @@ router.post("/type", mangaController.createMangaType);
 // Manga boshqaruvi
 router.post(
   "/",
+  protect,
+  // restrictTo("admin"),
   upload.fields([
     { name: "cover", maxCount: 1 },
     { name: "banner", maxCount: 1 },

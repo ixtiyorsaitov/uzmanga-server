@@ -15,8 +15,6 @@ const { uploadService, uploadFolders } = require("../services/upload.service");
 
 exports.createManga = async (req, res, next) => {
   try {
-    // 1. FormData'dan ma'lumotlarni olish
-    // Eslatma: FormData hamma narsani string qilib yuboradi
     let {
       title,
       categories,
@@ -30,7 +28,7 @@ exports.createManga = async (req, res, next) => {
       ...mangaData
     } = req.body;
 
-    const requestUser = "698d9d3ab53d93cb767b9aba"; // req.user.id
+    const requestUser = req.user._id;
 
     // 2. String bo'lib kelgan massivlarni parse qilish (Agar kerak bo'lsa)
     const parsedCategories =
@@ -246,8 +244,13 @@ exports.getManga = async (req, res, next) => {
         select: "url type -_id",
       })
       .populate("type", "name -_id")
-      .populate("categories")
+      .populate("categories", "name")
+      .populate("genres", "name")
       .populate("genres")
+      .populate("createdBy", "name avatar")
+      .populate("status", "name")
+      .populate("translationStatus", "name")
+      .populate("ageRating", "name")
       .lean();
 
     if (!mangaRaw) {

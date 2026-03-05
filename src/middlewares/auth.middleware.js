@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 const ApiResponse = require("../utils/response");
-const User = require("../models/User"); 
+const User = require("../models/User");
 
 exports.protect = async (req, res, next) => {
   try {
@@ -62,7 +62,7 @@ exports.restrictTo = (...roles) => {
     if (!roles.includes(req.user.role)) {
       return ApiResponse.error(
         res,
-        `Sizda ushbu amalni bajarish uchun ruxsat yo'q (Roli: ${req.user.role})`,
+        `Sizda ushbu amalni bajarish uchun ruxsat yo'q`,
         403,
       );
     }

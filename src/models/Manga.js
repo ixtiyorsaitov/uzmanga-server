@@ -40,7 +40,7 @@ const mangaSchema = new mongoose.Schema(
     },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     genres: [{ type: mongoose.Schema.Types.ObjectId, ref: "Genre" }],
-    publishers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    translators: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     images: {
       cover: {
         type: mongoose.Schema.Types.ObjectId,
