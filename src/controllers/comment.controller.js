@@ -80,7 +80,7 @@ exports.createReplyComment = async (req, res, next) => {
     }
 
     const comment = await Comment.create({
-      author: reqUser,
+      author: req.user._id,
       content,
       targetId,
       targetType,
@@ -90,10 +90,15 @@ exports.createReplyComment = async (req, res, next) => {
 
     const populatedComment = await comment.populate([
       { path: "author", select: "name avatar" },
-      { path: "reply.user", select: "name" },
+      { path: "replyTo.user", select: "name" },
     ]);
 
-    return ApiResponse.success(res, populatedComment, "Izoh yozildi", 201);
+    return ApiResponse.success(
+      res,
+      populatedComment,
+      "Izohga javob yozildi",
+      201,
+    );
   } catch (error) {
     next(error);
   }
@@ -125,7 +130,8 @@ exports.getComments = async (req, res) => {
       parentId: null,
     })
       .populate("author", "name avatar")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return ApiResponse.success(
       res,
@@ -166,9 +172,33 @@ exports.getRepliedComments = async (req, res) => {
     })
       .populate("author", "name avatar")
       .populate("replyTo.user", "name")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 })
+      .lean();
 
     return ApiResponse.success(res, comments, "Izohlar olindi", 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteComment = async (req, res, next) => {
+  try {
+    const { commentId } = req.params;
+    const userId = req.user._id;
+
+    const comment = await Comment.findById(commentId).lean();
+
+    if (!comment) {
+      return ApiResponse.error(res, "Izoh topilmadi", 404);
+    }
+
+    if (comment.author.toString() !== userId.toString()) {
+      return ApiResponse.error(res, "Izoh egasi emassiz", 403);
+    }
+
+    await Comment.findByIdAndDelete(commentId);
+
+    return ApiResponse.success(res, "Izoh o'chirildi", 200);
   } catch (error) {
     next(error);
   }

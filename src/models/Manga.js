@@ -56,6 +56,24 @@ const mangaSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    stats: {
+      comments: {
+        type: Number,
+        default: 0,
+      },
+      bookmarks: {
+        type: Number,
+        default: 0,
+      },
+      likes: {
+        type: Number,
+        default: 0,
+      },
+      views: {
+        type: Number,
+        default: 0,
+      },
+    },
   },
   { timestamps: true },
 );
