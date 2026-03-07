@@ -181,6 +181,34 @@ exports.getRepliedComments = async (req, res) => {
   }
 };
 
+exports.updateComment = async (req, res, next) => {
+  try {
+    const { commentId } = req.params;
+    const { content } = req.body;
+    if (!content) {
+      return ApiResponse.error(res, "Barcha maydonlarni to'ldiring!", 400);
+    }
+    const userId = req.user._id;
+    const comment = await Comment.findById(commentId).lean();
+    if (!comment) {
+      return ApiResponse.error(res, "Izoh topilmadi", 404);
+    }
+    if (comment.author.toString() !== userId.toString()) {
+      return ApiResponse.error(res, "Izoh egasi emassiz", 403);
+    }
+
+    const updated = await Comment.findByIdAndUpdate(
+      commentId,
+      { $set: { content: content } },
+      { new: true },
+    ).lean();
+
+    return ApiResponse.success(res, updated, "Izoh tahrirlandi", 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.deleteComment = async (req, res, next) => {
   try {
     const { commentId } = req.params;
@@ -198,7 +226,7 @@ exports.deleteComment = async (req, res, next) => {
 
     await Comment.findByIdAndDelete(commentId);
 
-    return ApiResponse.success(res, "Izoh o'chirildi", 200);
+    return ApiResponse.success(res, null, "Izoh o'chirildi", 200);
   } catch (error) {
     next(error);
   }
