@@ -69,3 +69,36 @@ exports.restrictTo = (...roles) => {
     next();
   };
 };
+
+exports.optionalProtect = async (req, res, next) => {
+  try {
+    let token;
+    if (req.cookies && req.cookies.access_token) {
+      token = req.cookies.access_token;
+    } else if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
+    }
+
+    // Agar token umuman yo'q bo'lsa, mehmon sifatida o'tkazib yuboramiz
+    if (!token) {
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUser = await User.findById(decoded.id);
+
+    // Agar foydalanuvchi topilsa, uni req.user ga yopishtiramiz
+    if (currentUser) {
+      req.user = currentUser;
+    }
+
+    next();
+  } catch (error) {
+    // Token eskirgan yoki xato bo'lsa ham dastur to'xtamasligi kerak,
+    // shunchaki user tizimga kirmagan deb hisoblab o'tkazib yuboramiz.
+    next();
+  }
+};

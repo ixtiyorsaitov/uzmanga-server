@@ -4,6 +4,7 @@ const commentSchema = new mongoose.Schema(
   {
     targetId: {
       type: mongoose.Schema.Types.ObjectId,
+      refPath: "targetType",
       required: true,
       index: true,
     },
@@ -53,11 +54,7 @@ const commentSchema = new mongoose.Schema(
     },
 
     stats: {
-      likes: {
-        type: Number,
-        default: 0,
-      },
-      dislikes: {
+      score: {
         type: Number,
         default: 0,
       },

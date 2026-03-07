@@ -1,5 +1,7 @@
 const ApiResponse = require("../utils/response");
 const Comment = require("../models/Comment");
+const Like = require("../models/Like");
+const commentService = require("../services/comment.service");
 const allowedTypes = ["Manga", "Chapter", "User"];
 
 exports.createComment = async (req, res, next) => {
@@ -104,11 +106,12 @@ exports.createReplyComment = async (req, res, next) => {
   }
 };
 
-exports.getComments = async (req, res) => {
+exports.getComments = async (req, res, next) => {
   try {
     const { targetId } = req.params;
     const { targetType } = req.query;
 
+    const userId = req.user ? req.user._id : null;
     if (!targetType) {
       return ApiResponse.error(
         res,
@@ -131,11 +134,17 @@ exports.getComments = async (req, res) => {
     })
       .populate("author", "name avatar")
       .sort({ createdAt: -1 })
-      .lean();
+      .lean(); // .lean() doim bo'lishi shart, bo'lmasa JS object qo'sha olmaymiz
+
+    // OPTIMAL QISMI: userReaction'ni yopishtiramiz
+    const commentsWithReactions = await commentService.attachUserReactions(
+      comments,
+      userId,
+    );
 
     return ApiResponse.success(
       res,
-      comments,
+      commentsWithReactions,
       "Comments olish muvaffaqiyatli",
       200,
     );
@@ -149,6 +158,8 @@ exports.getRepliedComments = async (req, res) => {
     const { targetId, parentId } = req.params;
     const { targetType } = req.query;
 
+    const userId = req.user ? req.user._id : null;
+
     if (!targetType) {
       return ApiResponse.error(
         res,
@@ -156,7 +167,6 @@ exports.getRepliedComments = async (req, res) => {
         400,
       );
     }
-    const allowedTypes = ["Manga", "Chapter", "User"];
     if (!allowedTypes.includes(targetType)) {
       return ApiResponse.error(
         res,
@@ -172,10 +182,21 @@ exports.getRepliedComments = async (req, res) => {
     })
       .populate("author", "name avatar")
       .populate("replyTo.user", "name")
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) // reply'lar odatda eskidan yangiga qarab turadi
       .lean();
 
-    return ApiResponse.success(res, comments, "Izohlar olindi", 200);
+    // OPTIMAL QISMI: userReaction'ni yopishtiramiz
+    const commentsWithReactions = await commentService.attachUserReactions(
+      comments,
+      userId,
+    );
+
+    return ApiResponse.success(
+      res,
+      commentsWithReactions,
+      "Izohlar olindi",
+      200,
+    );
   } catch (error) {
     next(error);
   }
@@ -227,6 +248,94 @@ exports.deleteComment = async (req, res, next) => {
     await Comment.findByIdAndDelete(commentId);
 
     return ApiResponse.success(res, null, "Izoh o'chirildi", 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.toggleReaction = async (req, res, next) => {
+  try {
+    const { commentId } = req.params;
+    const { value } = req.body; // 1 (Like) yoki -1 (Dislike)
+    const userId = req.user._id;
+
+    if (![1, -1].includes(value)) {
+      return ApiResponse.error(res, "Noto'g'ri qiymat jo'natildi", 400);
+    }
+
+    const comment = await Comment.findById(commentId).lean();
+    if (!comment) {
+      return ApiResponse.error(res, "Izoh topilmadi", 404);
+    }
+
+    const existingReaction = await Like.findOne({
+      user: userId,
+      targetId: commentId,
+      targetType: "Comment",
+    });
+
+    let updatedComment; // Yangilangan commentni saqlash uchun o'zgaruvchi
+
+    if (existingReaction) {
+      // 1-HOLAT: O'zi bosgan tugmani qayta bosib, bekor qilyapti (Toggle off)
+      if (existingReaction.value === value) {
+        await Like.findByIdAndDelete(existingReaction._id);
+
+        updatedComment = await Comment.findByIdAndUpdate(
+          commentId,
+          { $inc: { "stats.score": -value } },
+          { new: true }, // Yangilangan hujjatni qaytarishni so'raymiz
+        );
+
+        return ApiResponse.success(
+          res,
+          { score: updatedComment.stats.score, userReaction: null }, // Qaytarilayotgan data
+          "Reaksiya olib tashlandi",
+          200,
+        );
+      }
+
+      // 2-HOLAT: Fikrini o'zgartirdi
+      else {
+        existingReaction.value = value;
+        await existingReaction.save();
+
+        const scoreChange = value === 1 ? 2 : -2;
+        updatedComment = await Comment.findByIdAndUpdate(
+          commentId,
+          { $inc: { "stats.score": scoreChange } },
+          { new: true },
+        );
+
+        return ApiResponse.success(
+          res,
+          { score: updatedComment.stats.score, userReaction: value },
+          "Reaksiya o'zgartirildi",
+          200,
+        );
+      }
+    }
+
+    // 3-HOLAT: Yangi reaksiya
+    await Like.create({
+      user: userId,
+      targetId: commentId,
+      targetType: "Comment",
+      value: value,
+    });
+
+    updatedComment = await Comment.findByIdAndUpdate(
+      commentId,
+      { $inc: { "stats.score": value } },
+      { new: true },
+    );
+
+    return ApiResponse.success(
+      res,
+      { score: updatedComment.stats.score, userReaction: value },
+      "Reaksiya qabul qilindi",
+      200,
+    );
   } catch (error) {
     next(error);
   }
