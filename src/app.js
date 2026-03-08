@@ -27,6 +27,8 @@ const allowedOrigins = [
 
 const app = express();
 
+app.set("trust proxy", true);
+
 // --- Middlewares ---
 app.use(helmet());
 app.use(cookieParser());

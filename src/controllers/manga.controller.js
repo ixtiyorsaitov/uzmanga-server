@@ -8,10 +8,13 @@ const Category = require("../models/Category");
 const AgeRating = require("../models/AgeRating");
 const Genre = require("../models/Genre");
 const Chapter = require("../models/Chapter");
+const ReadingProgress = require("../models/ReadingProgress");
+const ViewLog = require("../models/ViewLog");
 const mangaUtils = require("../utils/manga.utils");
 const mangaService = require("../services/manga.service");
 const ApiResponse = require("../utils/response");
 const { uploadService, uploadFolders } = require("../services/upload.service");
+const { recordUniversalView } = require("../services/viewlog.service");
 
 exports.createManga = async (req, res, next) => {
   try {
@@ -234,11 +237,13 @@ exports.getManga = async (req, res, next) => {
 
     const isId = mongoose.Types.ObjectId.isValid(identifier);
 
+    const userId = req.user ? req.user._id : null;
+
     const query = isId
       ? Manga.findById(identifier)
       : Manga.findOne({ slug: identifier });
 
-    const mangaRaw = await query
+    const manga = await query
       .populate({
         path: "images.cover images.banner",
         select: "url type -_id",
@@ -253,16 +258,28 @@ exports.getManga = async (req, res, next) => {
       .populate("ageRating", "name")
       .lean();
 
-    if (!mangaRaw) {
+    if (!manga) {
       return ApiResponse.error(res, "Manga topilmadi", 404);
     }
 
-    const manga = {
-      ...mangaRaw,
-      type: mangaRaw.type?.name || null,
+    recordUniversalView(req, manga._id.toString(), "Manga").catch((err) =>
+      console.error("View background xatosi:", err),
+    );
+
+    let userProgress = null;
+    if (userId) {
+      userProgress = await ReadingProgress.findOne({
+        user: userId,
+        manga: manga._id,
+      }).populate("lastReadChapter", "title chapterNumber slug");
+    }
+
+    const mangaWithProgress = {
+      ...manga,
+      userProgress: userProgress ? userProgress.lastReadChapter : null,
     };
 
-    return ApiResponse.success(res, manga, "Topildi", 200);
+    return ApiResponse.success(res, mangaWithProgress, "Topildi", 200);
   } catch (error) {
     next(error);
   }
@@ -326,6 +343,57 @@ exports.getChapterById = async (req, res, next) => {
     }
 
     return ApiResponse.success(res, chapter, "Topildi", 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getMangaAnalytics = async (req, res, next) => {
+  try {
+    const { mangaId } = req.params;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const analytics = await ViewLog.aggregate([
+      // 1-bosqich: Filtr (Faqat oxirgi 30 kun va aynan shu manga)
+      {
+        $match: {
+          targetId: new mongoose.Types.ObjectId(mangaId),
+          targetModel: "Manga",
+          createdAt: { $gte: thirtyDaysAgo }, // $gte = Greater than or equal (Katta yoki teng)
+        },
+      },
+      // 2-bosqich: Guruhlash (Har bir kun uchun)
+      {
+        $group: {
+          // createdAt vaqtini "YYYY-MM-DD" formatiga o'tkazib, shunga qarab guruhlaymiz
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+          },
+          // Shu kunga to'g'ri kelgan hujjatlarni 1 tadan qo'shib sanaymiz
+          viewsCount: { $sum: 1 },
+        },
+      },
+      // 3-bosqich: Tartiblash (Sana bo'yicha o'sish tartibida: eskidan yangiga)
+      {
+        $sort: { _id: 1 },
+      },
+    ]);
+
+    /* Kutilayotgan natija formati:
+      [
+        { "_id": "2023-10-25", "viewsCount": 145 },
+        { "_id": "2023-10-26", "viewsCount": 210 },
+        ...
+      ]
+    */
+
+    // 3. (Ixtiyoriy) Agar ba'zi kunlarda umuman view bo'lmagan bo'lsa,
+    // ular natijada yo'q bo'lib qoladi. Front-end chart buzilmasligi uchun
+    // bo'sh kunlarni 0 qilib to'ldirib yuborish mumkin (JS qismida).
+
+    return ApiResponse.success(res, analytics, "Analitika olindi", 200);
   } catch (error) {
     next(error);
   }

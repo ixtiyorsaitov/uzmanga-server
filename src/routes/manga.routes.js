@@ -1,7 +1,11 @@
 const express = require("express");
 const router = express.Router();
 
-const { protect, restrictTo } = require("../middlewares/auth.middleware");
+const {
+  protect,
+  restrictTo,
+  optionalProtect,
+} = require("../middlewares/auth.middleware");
 const mangaController = require("../controllers/manga.controller");
 const chapterController = require("../controllers/chapter.controller"); // Ajratilgan controller
 const upload = require("../middlewares/upload.middleware");
@@ -9,7 +13,8 @@ const upload = require("../middlewares/upload.middleware");
 // --- PUBLIC ROUTES ---
 router.get("/", mangaController.getAllMangas);
 router.get("/type", mangaController.getAllMangaTypes);
-router.get("/:id", mangaController.getManga);
+router.get("/:id", optionalProtect, mangaController.getManga);
+router.get("/:mangaId/analytics", mangaController.getMangaAnalytics);
 
 // --- PROTECTED ROUTES (Admin & Publisher) ---
 

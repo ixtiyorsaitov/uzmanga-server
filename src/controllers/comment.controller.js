@@ -109,23 +109,29 @@ exports.createReplyComment = async (req, res, next) => {
 exports.getComments = async (req, res, next) => {
   try {
     const { targetId } = req.params;
-    const { targetType } = req.query;
+    const { targetType, sortBy = "newest", page = 1, limit = 10 } = req.query;
 
     const userId = req.user ? req.user._id : null;
+
     if (!targetType) {
-      return ApiResponse.error(
-        res,
-        "targetType yuborilishi shart (Manga, Chapter yoki User)",
-        400,
-      );
+      return ApiResponse.error(res, "targetType yuborilishi shart", 400);
     }
     if (!allowedTypes.includes(targetType)) {
-      return ApiResponse.error(
-        res,
-        "Noto'g'ri targetType yuborildi (Manga, Chapter yoki User)",
-        400,
-      );
+      return ApiResponse.error(res, "Noto'g'ri targetType", 400);
     }
+
+    let sortQuery = { createdAt: -1 };
+    if (sortBy === "popular") {
+      sortQuery = { "stats.score": -1, createdAt: -1 };
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const totalComments = await Comment.countDocuments({
+      targetId,
+      targetType,
+      parentId: null,
+    });
 
     const comments = await Comment.find({
       targetId,
@@ -133,18 +139,25 @@ exports.getComments = async (req, res, next) => {
       parentId: null,
     })
       .populate("author", "name avatar")
-      .sort({ createdAt: -1 })
-      .lean(); // .lean() doim bo'lishi shart, bo'lmasa JS object qo'sha olmaymiz
+      .sort(sortQuery)
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
 
-    // OPTIMAL QISMI: userReaction'ni yopishtiramiz
     const commentsWithReactions = await commentService.attachUserReactions(
       comments,
       userId,
     );
 
+    const hasNextPage = skip + comments.length < totalComments;
+
     return ApiResponse.success(
       res,
-      commentsWithReactions,
+      {
+        comments: commentsWithReactions,
+        hasNextPage,
+        nextPage: Number(page) + 1,
+      },
       "Comments olish muvaffaqiyatli",
       200,
     );
@@ -153,10 +166,10 @@ exports.getComments = async (req, res, next) => {
   }
 };
 
-exports.getRepliedComments = async (req, res) => {
+exports.getRepliedComments = async (req, res, next) => {
   try {
     const { targetId, parentId } = req.params;
-    const { targetType } = req.query;
+    const { targetType, page = 1, limit = 5 } = req.query;
 
     const userId = req.user ? req.user._id : null;
 
@@ -167,13 +180,18 @@ exports.getRepliedComments = async (req, res) => {
         400,
       );
     }
+    const allowedTypes = ["Manga", "Chapter", "User"];
     if (!allowedTypes.includes(targetType)) {
-      return ApiResponse.error(
-        res,
-        "Noto'g'ri targetType yuborildi (Manga, Chapter yoki User)",
-        400,
-      );
+      return ApiResponse.error(res, "Noto'g'ri targetType yuborildi", 400);
     }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const totalComments = await Comment.countDocuments({
+      targetId,
+      targetType,
+      parentId,
+    });
 
     const comments = await Comment.find({
       targetId,
@@ -182,18 +200,25 @@ exports.getRepliedComments = async (req, res) => {
     })
       .populate("author", "name avatar")
       .populate("replyTo.user", "name")
-      .sort({ createdAt: 1 }) // reply'lar odatda eskidan yangiga qarab turadi
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .limit(Number(limit))
       .lean();
 
-    // OPTIMAL QISMI: userReaction'ni yopishtiramiz
     const commentsWithReactions = await commentService.attachUserReactions(
       comments,
       userId,
     );
 
+    const hasNextPage = skip + comments.length < totalComments;
+
     return ApiResponse.success(
       res,
-      commentsWithReactions,
+      {
+        comments: commentsWithReactions,
+        hasNextPage,
+        nextPage: Number(page) + 1,
+      },
       "Izohlar olindi",
       200,
     );

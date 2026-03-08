@@ -107,3 +107,23 @@ exports.clearMangaChapters = async (manga) => {
 
   await Chapter.deleteMany({ manga: manga._id });
 };
+
+exports.updateReadingProgress = async (userId, mangaId, chapterId) => {
+  if (!userId) return;
+
+  try {
+    await ReadingProgress.findOneAndUpdate(
+      { user: userId, manga: mangaId },
+      {
+        lastReadChapter: chapterId,
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+  } catch (error) {
+    throw new Error("Progress saqlashda xatolik");
+  }
+};

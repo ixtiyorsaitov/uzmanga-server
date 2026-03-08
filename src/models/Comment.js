@@ -89,23 +89,46 @@ commentSchema.post("save", async function (doc) {
 commentSchema.post("findOneAndDelete", async function (doc) {
   if (!doc) return;
 
+  // 1. O'chirilishi kerak bo'lgan barcha comment ID larini bitta massivga yig'amiz.
+  // Boshida ro'yxatda faqat hozir o'chirilayotgan commentning o'zi bor.
+  const commentIdsToDelete = [doc._id];
+
+  // A HOLAT: Agar bu Reply (Javob) comment bo'lsa
   if (doc.parentId) {
-    const subRepliesCount = await mongoose.model("Comment").countDocuments({
-      "replyTo.commentId": doc._id,
-    });
+    // Agar bu reply'ga ham kimdir sub-reply yozgan bo'lsa, ularni ID larini topamiz
+    const subReplies = await mongoose
+      .model("Comment")
+      .find({ "replyTo.commentId": doc._id })
+      .select("_id");
+    const subReplyIds = subReplies.map((reply) => reply._id);
 
+    // Ularni ham o'chiriladiganlar ro'yxatiga qo'shamiz
+    commentIdsToDelete.push(...subReplyIds);
+
+    // Ota commentning 'replies' sanoqlarini to'g'rilaymiz
     await mongoose.model("Comment").findByIdAndUpdate(doc.parentId, {
-      $inc: { "stats.replies": -(1 + subRepliesCount) },
+      $inc: { "stats.replies": -(1 + subReplyIds.length) },
     });
 
-    if (subRepliesCount > 0) {
-      await mongoose
-        .model("Comment")
-        .deleteMany({ "replyTo.commentId": doc._id });
+    // Sub-reply larni Comment bazasidan o'chiramiz
+    if (subReplyIds.length > 0) {
+      await mongoose.model("Comment").deleteMany({ _id: { $in: subReplyIds } });
     }
   }
 
+  // B HOLAT: Agar bu Asosiy (Root) comment bo'lsa
   if (!doc.parentId) {
+    // Barcha javoblarning ID larini topamiz
+    const childComments = await mongoose
+      .model("Comment")
+      .find({ parentId: doc._id })
+      .select("_id");
+    const childIds = childComments.map((child) => child._id);
+
+    // Javoblarning ID larini ham ro'yxatga qo'shamiz
+    commentIdsToDelete.push(...childIds);
+
+    // Manga yoki Chapter sanoqlarini kamaytiramiz
     if (doc.targetType === "Manga") {
       await mongoose.model("Manga").findByIdAndUpdate(doc.targetId, {
         $inc: { "stats.comments": -1 },
@@ -116,7 +139,18 @@ commentSchema.post("findOneAndDelete", async function (doc) {
       });
     }
 
-    await mongoose.model("Comment").deleteMany({ parentId: doc._id });
+    // Barcha javoblarni Comment bazasidan o'chiramiz
+    if (childIds.length > 0) {
+      await mongoose.model("Comment").deleteMany({ _id: { $in: childIds } });
+    }
+  }
+
+  // 2. ENG ASOSIY QISM: Yig'ilgan BARCHA ID larga (ham ota, ham bolalar) tegishli Likelarni BITTADA o'chiramiz
+  if (commentIdsToDelete.length > 0) {
+    await mongoose.model("Like").deleteMany({
+      targetType: "Comment",
+      targetId: { $in: commentIdsToDelete },
+    });
   }
 });
 commentSchema.index({ targetId: 1, targetType: 1, parentId: 1, createdAt: -1 });
