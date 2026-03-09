@@ -24,8 +24,8 @@ const allowedOrigins = [
   "https://uzmanga-auth.vercel.app",
   "http://localhost:3000",
   "http://localhost:5000",
-  proccess.env.FRONTEND_URL,
-  proccess.env.APP_URL,
+  process.env.FRONTEND_URL,
+  process.env.APP_URL,
 ];
 
 const app = express();
