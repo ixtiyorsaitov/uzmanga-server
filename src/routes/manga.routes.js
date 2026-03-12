@@ -35,6 +35,7 @@ router.post(
 
 router.put(
   "/:id",
+  protect,
   upload.fields([
     { name: "cover", maxCount: 1 },
     { name: "banner", maxCount: 1 },

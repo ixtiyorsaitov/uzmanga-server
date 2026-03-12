@@ -20,8 +20,15 @@ const chapterSchema = new Schema(
     },
     pages: [
       {
-        type: Schema.Types.ObjectId,
-        ref: "Media",
+        media: {
+          type: Schema.Types.ObjectId,
+          ref: "Media",
+          required: true,
+        },
+        pageNumber: {
+          type: Number,
+          required: true,
+        },
       },
     ],
     disableComments: {
@@ -43,11 +50,7 @@ const chapterSchema = new Schema(
       default: Date.now,
     },
     stats: {
-      likes: {
-        type: Number,
-        default: 0,
-      },
-      dislikes: {
+      score: {
         type: Number,
         default: 0,
       },

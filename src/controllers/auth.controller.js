@@ -84,13 +84,13 @@ exports.googleCallback = async (req, res) => {
 // 3️⃣ Get Current User
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-google_id");
+    const user = await User.findById(req.user.id).select("-google_id").lean();
 
     if (!user) {
       return ApiResponse.error(res, "User not found", 404);
     }
 
-    return ApiResponse.success(res, { user }, "User retrieved successfully");
+    return ApiResponse.success(res, user, "User retrieved successfully");
   } catch (error) {
     console.error("Get Me Error:", error);
     return ApiResponse.error(res, "Failed to retrieve user", 500);

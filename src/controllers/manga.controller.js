@@ -110,6 +110,10 @@ exports.updateManga = async (req, res, next) => {
     );
     if (!manga) return ApiResponse.error(res, "Manga topilmadi", 404);
 
+    if (manga.createdBy.toString() !== req.user._id.toString()) {
+      return ApiResponse.error(res, "Ruxsat yo'q", 403);
+    }
+
     if (newSlugInput) {
       const finalSlug = mangaUtils.generateSlug("", newSlugInput);
       if (finalSlug !== manga.slug) {
@@ -199,7 +203,7 @@ exports.getAllMangas = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 12, 50);
     const skip = (page - 1) * limit;
 
-    const mangasRaw = await Manga.find()
+    const mangas = await Manga.find()
       .select("title status releaseYear images slug")
       .populate({
         path: "images.cover",
@@ -210,11 +214,6 @@ exports.getAllMangas = async (req, res, next) => {
       .skip(skip)
       .limit(limit)
       .lean();
-
-    const mangas = mangasRaw.map((manga) => ({
-      ...manga,
-      type: manga.type?.name || null,
-    }));
 
     return ApiResponse.success(
       res,
@@ -248,10 +247,9 @@ exports.getManga = async (req, res, next) => {
         path: "images.cover images.banner",
         select: "url type -_id",
       })
-      .populate("type", "name -_id")
+      .populate("type", "name")
       .populate("categories", "name")
       .populate("genres", "name")
-      .populate("genres")
       .populate("createdBy", "name avatar")
       .populate("status", "name")
       .populate("translationStatus", "name")

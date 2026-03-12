@@ -74,6 +74,23 @@ const mangaSchema = new mongoose.Schema(
         default: 0,
       },
     },
+    alternativeTitles: {
+      en: { type: String, trim: true },
+      ru: { type: String, trim: true },
+      romaji: { type: String, trim: true },
+      native: { type: String, trim: true },
+    },
+    seo: {
+      metaTitle: {
+        type: String,
+        maxLength: [60, "Meta title 60 ta belgidan oshmasligi kerak"],
+      },
+      metaDescription: {
+        type: String,
+        maxLength: [160, "Meta description 160 ta belgidan oshmasligi kerak"],
+      },
+      focusKeywords: [{ type: String }], // Qidiruv uchun asosiy kalit so'zlar
+    },
   },
   { timestamps: true },
 );

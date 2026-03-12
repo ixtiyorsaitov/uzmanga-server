@@ -45,7 +45,10 @@ exports.updateMangaImage = async (manga, files, type) => {
   if (files && files[fieldName]) {
     const oldMedia = manga.images[fieldName];
     if (oldMedia && oldMedia.path) {
-      await uploadService.deleteFromStorage(oldMedia.path);
+      await uploadService.deleteFromStorage(
+        oldMedia.path,
+        uploadFolders.MANGA_ASSETS.bucket,
+      );
       await Media.findByIdAndDelete(oldMedia._id);
     }
 

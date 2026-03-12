@@ -1,5 +1,6 @@
 const Manga = require("../models/Manga");
 const Chapter = require("../models/Chapter");
+const Like = require("../models/Like");
 const chapterService = require("../services/chapter.service");
 const ApiResponse = require("../utils/response");
 
@@ -11,6 +12,8 @@ exports.getChaptersByMangaId = async (req, res, next) => {
 
     page = parseInt(page);
     limit = parseInt(limit);
+
+    const userId = req.user ? req.user._id : null;
 
     const query = { manga: mangaId };
 
@@ -41,12 +44,17 @@ exports.getChaptersByMangaId = async (req, res, next) => {
       .limit(limit)
       .lean();
 
+    const chaptersWithLikes = await chapterService.attachUserLikesToChapters(
+      chapters,
+      userId,
+    );
+
     const totalChapters = await Chapter.countDocuments(query);
 
     return ApiResponse.success(
       res,
       {
-        chapters,
+        chapters: chaptersWithLikes,
         pagination: {
           total: totalChapters,
           page,
@@ -65,8 +73,30 @@ exports.getChaptersByMangaId = async (req, res, next) => {
 exports.getChapterById = async (req, res, next) => {
   try {
     const { chapterId } = req.params;
-    const chapter = await Chapter.findById(chapterId).populate("pages");
+
+    const chapter = await Chapter.findById(chapterId)
+      .populate("pages.media", "url")
+      .populate("manga", "title slug")
+      .lean();
+
     if (!chapter) return ApiResponse.error(res, "Bob topilmadi", 404);
+
+    let isLiked = false;
+
+    if (req.user && req.user._id) {
+      const reaction = await Like.findOne({
+        targetId: chapterId,
+        targetType: "Chapter",
+        user: req.user._id,
+      }).lean();
+
+      if (reaction) {
+        isLiked = true;
+      }
+    }
+
+    chapter.isLiked = isLiked;
+
     return ApiResponse.success(res, chapter, "Bob topildi", 200);
   } catch (error) {
     next(error);
@@ -74,9 +104,6 @@ exports.getChapterById = async (req, res, next) => {
 };
 
 exports.createChapter = async (req, res, next) => {
-  console.log("Body:", req.body);
-  console.log("Files keys:", req.files ? Object.keys(req.files) : "No files");
-  console.log("Pages exist?:", !!req.files?.pages);
   try {
     const { mangaId } = req.params;
     const {
@@ -87,18 +114,33 @@ exports.createChapter = async (req, res, next) => {
       price,
       disableComments,
     } = req.body;
-    const requestUser = "698d9d3ab53d93cb767b9aba";
+    const requestUser = req.user._id;
 
     if (!chapterNumber) return ApiResponse.error(res, "Bob raqami shart", 400);
 
-    const manga = await Manga.findById(mangaId);
+    const manga = await Manga.findById(mangaId)
+      .select("createdBy translators")
+      .lean();
+
     if (!manga) return ApiResponse.error(res, "Manga topilmadi", 404);
 
-    if (!req.files?.pages?.length) {
+    if (
+      manga.createdBy.toString() !== requestUser.toString() &&
+      !manga.translators.includes(requestUser.toString())
+    ) {
+      return ApiResponse.error(res, "Ruxsat yo'q", 403);
+    }
+
+    const existChapter = await Chapter.findOne({ chapterNumber }).lean();
+    if (existChapter) {
+      return ApiResponse.error(res, "Ushbu raqamli bob allaqachon mavjud", 400);
+    }
+
+    if (!req.files || !req.files.pages || !req.files.pages.length) {
       return ApiResponse.error(res, "Bob sahifalari yuklanishi shart", 400);
     }
 
-    const pageIds = await chapterService.uploadChapterPages(
+    const pagesData = await chapterService.uploadChapterPages(
       mangaId,
       chapterNumber,
       req.files.pages,
@@ -112,11 +154,12 @@ exports.createChapter = async (req, res, next) => {
       isLocked: isLocked === "true",
       price: price ? parseInt(price) : 0,
       disableComments: disableComments === "true",
-      pages: pageIds,
+      pages: pagesData,
       createdBy: requestUser,
     });
 
-    await chapterService.linkPagesToChapter(pageIds, chapter._id);
+    const mediaIdsOnly = pagesData.map((page) => page.media);
+    await chapterService.linkPagesToChapter(mediaIdsOnly, chapter._id);
 
     return ApiResponse.success(
       res,
@@ -136,7 +179,7 @@ exports.deleteChapter = async (req, res, next) => {
   try {
     const { id: mangaId, chapterId } = req.params;
 
-    const chapter = await Chapter.findById(chapterId).populate("pages");
+    const chapter = await Chapter.findById(chapterId).populate("pages.media");
 
     if (!chapter) {
       return ApiResponse.error(res, "Bob topilmadi", 404);
@@ -151,6 +194,84 @@ exports.deleteChapter = async (req, res, next) => {
     await chapter.deleteOne();
 
     return ApiResponse.success(res, null, "Bob va sahifalar o'chirildi", 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.toggleReaction = async (req, res, next) => {
+  try {
+    const { chapterId } = req.params;
+
+    const userId = req.user._id;
+
+    const chapter = await Chapter.findById(chapterId).lean();
+
+    if (!chapter) {
+      return ApiResponse.error(res, "Bob topilmadi", 404);
+    }
+
+    const reaction = await Like.findOne({
+      targetId: chapterId,
+      targetType: "Chapter",
+      user: userId,
+    });
+
+    if (reaction) {
+      return ApiResponse.success(
+        res,
+        { score: chapter.stats.score, isLiked: true },
+        "Rahmat aytilgan",
+        200,
+      );
+    }
+
+    await Like.create({
+      user: req.user._id,
+      targetId: chapterId,
+      targetType: "Chapter",
+      value: 1,
+    });
+
+    const updatedChapter = await Chapter.findByIdAndUpdate(
+      chapterId,
+      {
+        $inc: { "stats.score": 1 },
+      },
+      { new: true },
+    ).select("stats.score");
+
+    return ApiResponse.success(
+      res,
+      { score: updatedChapter.stats.score, isLiked: true },
+      "Rahmat aytildi",
+      200,
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.checkIsUserReacted = async (req, res, next) => {
+  try {
+    const { chapterId } = req.params;
+    const userId = req.user._id;
+
+    if (!userId) {
+      return ApiResponse.success(res, false, "", 200);
+    }
+
+    const reaction = await Like.findOne({
+      targetId: chapterId,
+      targetType: "Chapter",
+      user: userId,
+    });
+
+    if (!reaction) {
+      return ApiResponse.success(res, false, "", 200);
+    }
+
+    return ApiResponse.success(res, true, "", 200);
   } catch (error) {
     next(error);
   }
