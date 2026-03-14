@@ -1,4 +1,6 @@
 const Media = require("../models/Media");
+const Like = require("../models/Like");
+const UniqueView = require("../models/UniqueView");
 const { uploadService, uploadFolders } = require("./upload.service");
 
 exports.uploadChapterPages = async (mangaId, chapterNumber, files) => {
@@ -63,32 +65,46 @@ exports.deleteChapterAssets = async (chapter) => {
   }
 };
 
-exports.attachUserLikesToChapters = async (chapters, userId) => {
-  // 1. Agar boblar ro'yxati bo'sh bo'lsa yoki foydalanuvchi kirmagan bo'lsa
-  // hamma boblarga avtomatik isLiked: false qo'shib qaytaramiz
+exports.attachUserInteractionsToChapters = async (
+  chapters,
+  userId,
+  mangaId,
+) => {
   if (!chapters || chapters.length === 0 || !userId) {
-    return chapters.map((chapter) => ({ ...chapter, isLiked: false }));
+    return chapters.map((chapter) => ({
+      ...chapter,
+      isLiked: false,
+      isRead: false,
+    }));
   }
 
-  // 2. Barcha boblarning ID larini ajratib olamiz
   const chapterIds = chapters.map((chapter) => chapter._id);
 
-  // 3. Ushbu boblarga nisbatan joriy foydalanuvchi bosgan barcha reaksiyalarni olib kelamiz
-  const userLikes = await Like.find({
-    user: userId,
-    targetType: "Chapter", // Bu sizning Like modelingizdagi enum ga mos bo'lishi kerak
-    targetId: { $in: chapterIds },
-  }).lean();
+  const [userLikes, userReads] = await Promise.all([
+    Like.find({
+      user: userId,
+      targetType: "Chapter",
+      targetId: { $in: chapterIds },
+    }).lean(),
+    UniqueView.find({
+      user: userId,
+      targetId: { $in: chapterIds },
+      targetModel: "Chapter",
+      parentManga: mangaId,
+    }).lean(),
+  ]);
 
-  // 4. Qidirish tezligi O(1) bo'lishi uchun xeshmep (Set) yaratamiz.
-  // Agar like bosilgan bo'lsa, uning ID si shu to'plamda mavjud bo'ladi.
   const likedTargetIds = new Set(
     userLikes.map((like) => like.targetId.toString()),
   );
 
-  // 5. Har bir bobga isLiked: true/false qilib yopishtirib qaytaramiz
+  const readChapterIds = new Set(
+    userReads.map((read) => read.targetId.toString()),
+  );
+
   return chapters.map((chapter) => ({
     ...chapter,
     isLiked: likedTargetIds.has(chapter._id.toString()),
+    isRead: readChapterIds.has(chapter._id.toString()),
   }));
 };

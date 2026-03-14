@@ -13,7 +13,6 @@ const ViewLog = require("../models/ViewLog");
 const mangaUtils = require("../utils/manga.utils");
 const mangaService = require("../services/manga.service");
 const ApiResponse = require("../utils/response");
-const { uploadService, uploadFolders } = require("../services/upload.service");
 const { recordUniversalView } = require("../services/viewlog.service");
 
 exports.createManga = async (req, res, next) => {
@@ -269,7 +268,7 @@ exports.getManga = async (req, res, next) => {
       userProgress = await ReadingProgress.findOne({
         user: userId,
         manga: manga._id,
-      }).populate("lastReadChapter", "title chapterNumber slug");
+      }).populate("lastReadChapter", "title chapterNumber slug volumeNumber");
     }
 
     const mangaWithProgress = {

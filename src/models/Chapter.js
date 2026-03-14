@@ -62,6 +62,10 @@ const chapterSchema = new Schema(
         type: Number,
         default: 0,
       },
+      uniqueViews: {
+        type: Number,
+        default: 0,
+      },
     },
   },
   { timestamps: true },

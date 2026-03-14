@@ -39,6 +39,18 @@ router.get(
   chapterController.checkIsUserReacted,
 );
 
+router.post(
+  "/read/:chapterId",
+  optionalProtect,
+  chapterController.markChapterAsRead,
+);
+
+router.post(
+  "/read/:chapterId/toggle-read",
+  protect,
+  chapterController.toggleReadStatus,
+);
+
 router.delete(
   "/:mangaId/:chapterId",
   // ...adminAuth,

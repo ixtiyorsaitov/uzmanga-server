@@ -11,7 +11,7 @@ exports.checkIsBookmarked = async (req, res, next) => {
       return ApiResponse.error(res, "Manga ID noto'g'ri!", 400);
     }
 
-    const userId = req.user._id;
+    const userId = req.user?._id || null;
     if (!userId) {
       return ApiResponse.success(res, null, "Xatcho'pda yo'q");
     }

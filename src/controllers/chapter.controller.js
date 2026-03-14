@@ -1,7 +1,11 @@
 const Manga = require("../models/Manga");
 const Chapter = require("../models/Chapter");
 const Like = require("../models/Like");
+const UniqueViewHistory = require("../models/UniqueView");
+const ReadingProgress = require("../models/ReadingProgress");
 const chapterService = require("../services/chapter.service");
+const progressService = require("../services/progress.service");
+const viewService = require("../services/viewlog.service");
 const ApiResponse = require("../utils/response");
 
 exports.getChaptersByMangaId = async (req, res, next) => {
@@ -44,17 +48,19 @@ exports.getChaptersByMangaId = async (req, res, next) => {
       .limit(limit)
       .lean();
 
-    const chaptersWithLikes = await chapterService.attachUserLikesToChapters(
-      chapters,
-      userId,
-    );
+    const chaptersWithInteractions =
+      await chapterService.attachUserInteractionsToChapters(
+        chapters,
+        userId,
+        mangaId,
+      );
 
     const totalChapters = await Chapter.countDocuments(query);
 
     return ApiResponse.success(
       res,
       {
-        chapters: chaptersWithLikes,
+        chapters: chaptersWithInteractions,
         pagination: {
           total: totalChapters,
           page,
@@ -272,6 +278,125 @@ exports.checkIsUserReacted = async (req, res, next) => {
     }
 
     return ApiResponse.success(res, true, "", 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.markChapterAsRead = async (req, res, next) => {
+  try {
+    const { chapterId } = req.params;
+    const userId = req.user?._id || null;
+
+    const chapterExists = await Chapter.findById(chapterId).select("manga");
+
+    if (!chapterExists) {
+      return ApiResponse.error(res, "Bob topilmadi", 404);
+    }
+
+    const mangaId = chapterExists.manga;
+
+    viewService.recordUniversalView(req, chapterId, "Chapter").catch((err) => {
+      console.error("View service xatosi:", err);
+    });
+
+    let isNewUniqueView = false;
+    const promises = [];
+
+    if (userId) {
+      const historyResult = await UniqueViewHistory.updateOne(
+        { user: userId, targetId: chapterId, targetModel: "Chapter" },
+        {
+          $setOnInsert: {
+            user: userId,
+            targetId: chapterId,
+            targetModel: "Chapter",
+            parentManga: mangaId,
+          },
+        },
+        { upsert: true },
+      );
+
+      if (historyResult.upsertedCount > 0) {
+        isNewUniqueView = true;
+
+        promises.push(
+          Chapter.updateOne(
+            { _id: chapterId },
+            { $inc: { "stats.uniqueViews": 1 } },
+          ).exec(),
+        );
+      }
+
+    }
+
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
+
+    if (userId) {
+      await progressService.syncMaxReadingProgress(userId, mangaId);
+    }
+
+    return ApiResponse.success(
+      res,
+      { isNewUniqueView },
+      "Bob o'qilgan deb belgilandi.",
+      200,
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.toggleReadStatus = async (req, res, next) => {
+  try {
+    const { chapterId } = req.params;
+    const userId = req.user._id;
+
+    const chapterExists = await Chapter.findById(chapterId).select("manga");
+    if (!chapterExists) {
+      return ApiResponse.error(res, "Bob topilmadi", 404);
+    }
+    const mangaId = chapterExists.manga;
+
+    const existingHistory = await UniqueViewHistory.findOne({
+      user: userId,
+      targetId: chapterId,
+      targetModel: "Chapter",
+    });
+
+    let isRead = false;
+
+    if (existingHistory) {
+      isRead = false;
+      await UniqueViewHistory.deleteOne({ _id: existingHistory._id });
+      await Chapter.updateOne(
+        { _id: chapterId },
+        { $inc: { "stats.uniqueViews": -1 } },
+      );
+    } else {
+      isRead = true;
+      await UniqueViewHistory.create({
+        user: userId,
+        targetId: chapterId,
+        targetModel: "Chapter",
+        parentManga: mangaId,
+      });
+      await Chapter.updateOne(
+        { _id: chapterId },
+        { $inc: { "stats.uniqueViews": 1 } },
+      );
+    }
+
+    await progressService.syncMaxReadingProgress(userId, mangaId);
+
+    return ApiResponse.success(
+      res,
+      { isRead },
+      isRead ? "Bob o'qilgan deb belgilandi" : "Bob o'qilmagan deb belgilandi",
+      200,
+    );
   } catch (error) {
     next(error);
   }
