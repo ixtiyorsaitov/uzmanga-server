@@ -73,6 +73,10 @@ const mangaSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      chapters: {
+        type: Number,
+        default: 0,
+      },
     },
     alternativeTitles: {
       en: { type: String, trim: true },

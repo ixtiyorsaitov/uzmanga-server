@@ -32,6 +32,12 @@ router.post(
   upload.fields([{ name: "pages", maxCount: 100 }]),
   chapterController.createChapter,
 );
+router.put(
+  "/:chapterId",
+  protect,
+  upload.fields([{ name: "pages", maxCount: 100 }]),
+  chapterController.updateChapter,
+);
 router.post("/react/:chapterId", protect, chapterController.toggleReaction);
 router.get(
   "/react/:chapterId/check",
@@ -52,7 +58,8 @@ router.post(
 );
 
 router.delete(
-  "/:mangaId/:chapterId",
+  "/:chapterId",
+  protect,
   // ...adminAuth,
   chapterController.deleteChapter,
 );

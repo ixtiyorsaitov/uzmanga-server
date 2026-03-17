@@ -2,7 +2,6 @@ const Manga = require("../models/Manga");
 const Chapter = require("../models/Chapter");
 const Like = require("../models/Like");
 const UniqueViewHistory = require("../models/UniqueView");
-const ReadingProgress = require("../models/ReadingProgress");
 const chapterService = require("../services/chapter.service");
 const progressService = require("../services/progress.service");
 const viewService = require("../services/viewlog.service");
@@ -83,6 +82,7 @@ exports.getChapterById = async (req, res, next) => {
     const chapter = await Chapter.findById(chapterId)
       .populate("pages.media", "url")
       .populate("manga", "title slug")
+      .populate("createdBy", "name avatar")
       .lean();
 
     if (!chapter) return ApiResponse.error(res, "Bob topilmadi", 404);
@@ -181,23 +181,136 @@ exports.createChapter = async (req, res, next) => {
   }
 };
 
+exports.updateChapter = async (req, res, next) => {
+  try {
+    const { chapterId } = req.params;
+    const {
+      title,
+      chapterNumber,
+      volumeNumber,
+      isLocked,
+      price,
+      disableComments,
+    } = req.body;
+    const requestUser = req.user._id;
+
+    // 1. Bobni va unga tegishli mangani, hamda RASMLARNI (pages.media) topamiz
+    const chapter = await Chapter.findById(chapterId)
+      .populate({
+        path: "manga",
+        select: "createdBy translators _id",
+      })
+      .populate("pages.media"); // <-- MANA SHU QISM JUDA MUHIM
+
+    if (!chapter) return ApiResponse.error(res, "Bob topilmadi", 404);
+
+    // 2. Ruxsatni tekshirish
+    if (
+      chapter.manga.createdBy.toString() !== requestUser.toString() &&
+      !chapter.manga.translators.includes(requestUser.toString())
+    ) {
+      return ApiResponse.error(res, "Ruxsat yo'q", 403);
+    }
+
+    // 3. Bob raqami o'zgarayotgan bo'lsa, band emasligini tekshiramiz
+    if (chapterNumber && parseFloat(chapterNumber) !== chapter.chapterNumber) {
+      const existChapter = await Chapter.findOne({
+        manga: chapter.manga._id,
+        chapterNumber: parseFloat(chapterNumber),
+      }).lean();
+
+      if (existChapter) {
+        return ApiResponse.error(
+          res,
+          "Ushbu raqamli bob allaqachon mavjud",
+          400,
+        );
+      }
+    }
+
+    // 4. Agar YANGI sahifalar (rasmlar) yuklangan bo'lsa
+    if (req.files && req.files.pages && req.files.pages.length) {
+      // -- ESKI RASMLARNI O'CHIRISH (Service orqali) --
+      try {
+        await chapterService.deleteChapterAssets(chapter);
+      } catch (deleteError) {
+        console.error(
+          "Eski rasmlarni o'chirishda xatolik yuz berdi:",
+          deleteError,
+        );
+        // O'chirishdagi xatolik yangilashni to'xtatmasligi uchun catch qilib qo'yamiz
+      }
+
+      // -- YANGI RASMLARNI YUKLASH --
+      const cNum = chapterNumber
+        ? parseFloat(chapterNumber)
+        : chapter.chapterNumber;
+
+      const pagesData = await chapterService.uploadChapterPages(
+        chapter.manga._id,
+        cNum,
+        req.files.pages,
+      );
+
+      const mediaIdsOnly = pagesData.map((page) => page.media);
+      await chapterService.linkPagesToChapter(mediaIdsOnly, chapter._id);
+
+      // Yangi rasmlarni chapter obyektiga o'zlashtiramiz
+      chapter.pages = pagesData;
+    }
+
+    // 5. Boshqa ma'lumotlarni yangilash
+    if (title !== undefined) chapter.title = title;
+    if (chapterNumber !== undefined)
+      chapter.chapterNumber = parseFloat(chapterNumber);
+    if (volumeNumber !== undefined)
+      chapter.volumeNumber = parseInt(volumeNumber);
+    if (isLocked !== undefined)
+      chapter.isLocked = isLocked === "true" || isLocked === true;
+    if (price !== undefined) chapter.price = parseInt(price);
+    if (disableComments !== undefined)
+      chapter.disableComments =
+        disableComments === "true" || disableComments === true;
+
+    // O'zgarishlarni saqlaymiz
+    await chapter.save();
+
+    return ApiResponse.success(
+      res,
+      chapter,
+      "Bob muvaffaqiyatli yangilandi",
+      200,
+    );
+  } catch (error) {
+    if (error.code === 11000) {
+      return ApiResponse.error(res, "Ushbu raqamli bob allaqachon mavjud", 400);
+    }
+    next(error);
+  }
+};
+
 exports.deleteChapter = async (req, res, next) => {
   try {
-    const { id: mangaId, chapterId } = req.params;
+    const { chapterId } = req.params;
 
-    const chapter = await Chapter.findById(chapterId).populate("pages.media");
+    const chapter = await Chapter.findById(chapterId)
+      .populate("pages.media")
+      .populate("manga", "createdBy");
 
     if (!chapter) {
       return ApiResponse.error(res, "Bob topilmadi", 404);
     }
 
-    if (chapter.manga.toString() !== mangaId) {
-      return ApiResponse.error(res, "Bu bob ushbu mangaga tegishli emas", 400);
+    if (
+      chapter.createdBy.toString() !== req.user._id.toString() ||
+      chapter.manga.createdBy.toString() !== req.user._id.toString()
+    ) {
+      return ApiResponse.error(res, "Ruxsat yo'q", 403);
     }
 
     await chapterService.deleteChapterAssets(chapter);
 
-    await chapter.deleteOne();
+    await Chapter.findByIdAndDelete(chapter._id);
 
     return ApiResponse.success(res, null, "Bob va sahifalar o'chirildi", 200);
   } catch (error) {
@@ -327,7 +440,6 @@ exports.markChapterAsRead = async (req, res, next) => {
           ).exec(),
         );
       }
-
     }
 
     if (promises.length > 0) {
