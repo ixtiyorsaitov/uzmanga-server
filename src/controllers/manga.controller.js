@@ -395,3 +395,28 @@ exports.getMangaAnalytics = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getLatestUpdates = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 20;
+
+    const latestMangas = await Manga.find()
+      .sort({ "lastChapter.publishedAt": -1 })
+      .limit(limit)
+      .skip((page - 1) * limit)
+      .populate({
+        path: "images.cover",
+        select: "url",
+      })
+      .select("title slug images.cover lastChapter");
+
+    return ApiResponse.success(
+      res,
+      latestMangas,
+      "Oxirgi yangilanishlar olindi",
+    );
+  } catch (error) {
+    next(error);
+  }
+};

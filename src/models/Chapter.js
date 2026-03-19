@@ -91,6 +91,15 @@ chapterSchema.post("save", async function (doc) {
       );
     }
   }
+
+  await mongoose.model("Manga").findByIdAndUpdate(doc.manga, {
+    lastChapter: {
+      chapterId: doc._id,
+      chapterNumber: doc.chapterNumber,
+      volumeNumber: doc.volumeNumber,
+      publishedAt: doc.createdAt,
+    },
+  });
 });
 
 chapterSchema.post("findOneAndDelete", async function (doc) {

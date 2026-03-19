@@ -13,6 +13,7 @@ const upload = require("../middlewares/upload.middleware");
 // --- PUBLIC ROUTES ---
 router.get("/", mangaController.getAllMangas);
 router.get("/type", mangaController.getAllMangaTypes);
+router.get("/latest-updates", mangaController.getLatestUpdates);
 router.get("/:id", optionalProtect, mangaController.getManga);
 router.get("/:mangaId/analytics", mangaController.getMangaAnalytics);
 

@@ -84,6 +84,12 @@ const mangaSchema = new mongoose.Schema(
       romaji: { type: String, trim: true },
       native: { type: String, trim: true },
     },
+    lastChapter: {
+      chapterId: { type: mongoose.Schema.Types.ObjectId, ref: "Chapter" },
+      chapterNumber: Number,
+      volumeNumber: Number,
+      publishedAt: { type: Date, default: Date.now },
+    },
     seo: {
       metaTitle: {
         type: String,

@@ -9,5 +9,6 @@ const router = express.Router();
 router.get("/:mangaId/check", optionalProtect, controller.checkIsBookmarked);
 router.post("/:mangaId/toggle", protect, controller.toggleBookmark);
 router.delete("/:mangaId", protect, controller.deleteBookmark);
+router.get("/", protect, controller.getBookmarks);
 
 module.exports = router;

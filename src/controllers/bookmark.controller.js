@@ -1,6 +1,42 @@
+const { BOOKMARK_STATUS } = require("../constants/bookmark.js");
 const Bookmark = require("../models/Bookmark.js");
 const ApiResponse = require("../utils/response.js");
 const mongoose = require("mongoose");
+
+exports.getBookmarks = async (req, res, next) => {
+  try {
+    const { status = "all" } = req.query;
+    const userId = req.user._id;
+
+    if (status !== "all" && !Object.values(BOOKMARK_STATUS).includes(status)) {
+      return ApiResponse.error(res, "Noto'g'ri turdagi status kiritildi", 400);
+    }
+
+    const query = { user: userId };
+    if (status !== "all") {
+      query.status = status;
+    }
+
+    const bookmarks = await Bookmark.find(query).populate({
+      path: "manga",
+      select: "title images.cover type releaseYear stats.chapters slug",
+      populate: [
+        {
+          path: "images.cover",
+          select: "url",
+        },
+        {
+          path: "type",
+          select: "name",
+        },
+      ],
+    });
+
+    return ApiResponse.success(res, bookmarks);
+  } catch (error) {
+    next(error);
+  }
+};
 
 exports.checkIsBookmarked = async (req, res, next) => {
   try {

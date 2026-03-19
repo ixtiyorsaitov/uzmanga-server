@@ -1,9 +1,9 @@
 const BOOKMARK_STATUS = Object.freeze({
-  READING: "READING",
-  PLAN_TO_READ: "PLAN_TO_READ",
-  COMPLETED: "COMPLETED",
-  DROPPED: "DROPPED",
-  ON_HOLD: "ON_HOLD",
+  READING: "reading",
+  PLAN_TO_READ: "plan_to_read",
+  COMPLETED: "completed",
+  DROPPED: "dropped",
+  ON_HOLD: "on_hold",
 });
 const BOOKMARK_STATUS_LABELS = Object.freeze({
   [BOOKMARK_STATUS.READING]: "O'qilmoqda",
