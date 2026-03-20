@@ -9,7 +9,7 @@ exports.getMyApplications = async (req, res, next) => {
     let query = { user: req.user.id };
 
     if (status && status !== "all") {
-      const allowedStatuses = ["pending", "approved", "rejected"];
+      const allowedStatuses = ["pending", "approved", "rejected", "cancelled"];
 
       if (allowedStatuses.includes(status)) {
         query.status = status;
@@ -84,36 +84,6 @@ exports.submitApplication = async (req, res, next) => {
       application,
       "Arizangiz qabul qilindi. Moderatorlar tez orada ko'rib chiqadi.",
       201,
-    );
-  } catch (error) {
-    next(error);
-  }
-};
-
-// 2. Admin arizani tasdiqlashi yoki rad etishi
-exports.reviewApplication = async (req, res, next) => {
-  try {
-    const { status, adminComment } = req.body;
-    const application = await Application.findById(req.params.id);
-
-    if (!application) {
-      return ApiResponse.error(res, "Ariza topilmadi.", 404);
-    }
-
-    application.status = status;
-    application.adminComment = adminComment;
-    await application.save();
-
-    // Agar tasdiqlansa, foydalanuvchi rolini o'zgartiramiz
-    if (status === "approved") {
-      await User.findByIdAndUpdate(application.user, { role: "translator" });
-    }
-
-    ApiResponse.success(
-      res,
-      application,
-      `Ariza holati yangilandi: ${status}`,
-      200,
     );
   } catch (error) {
     next(error);
@@ -207,6 +177,88 @@ exports.cancelMyApplication = async (req, res, next) => {
       res,
       application,
       "Ariza muvaffaqiyatli bekor qilindi",
+      200,
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getTranslators = async (req, res, next) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+
+    let query = { type: "translator" };
+
+    if (status && status !== "all") {
+      const allowedStatuses = ["pending", "approved", "rejected", "cancelled"];
+
+      if (allowedStatuses.includes(status)) {
+        query.status = status;
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const applications = await Application.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("user", "email name avatar")
+      .populate("reviewedBy", "email name avatar");
+
+    const total = await Application.countDocuments(query);
+
+    return ApiResponse.success(
+      res,
+      {
+        data: applications,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      "Tarjimonlar ro'yxati topildi",
+      200,
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.reviewTranslatorApplication = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const application = await Application.findById(id);
+
+    if (!application) {
+      return ApiResponse.error(res, "Ariza topilmadi", 404);
+    }
+
+    const { status, adminComment } = req.body;
+
+    if (!status) {
+      return ApiResponse.error(res, "Status kiritilmadi", 400);
+    }
+
+    if (status === "approved") {
+      await User.findByIdAndUpdate(application.user, { role: "translator" });
+    }
+
+    if (status !== undefined) application.status = status;
+    if (adminComment !== undefined) application.adminComment = adminComment;
+
+    application.reviewedBy = req.user.id;
+    application.reviewedAt = Date.now();
+    await application.save();
+
+    return ApiResponse.success(
+      res,
+      application,
+      "Ariza muvaffaqiyatli yangilandi",
       200,
     );
   } catch (error) {
