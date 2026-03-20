@@ -20,6 +20,7 @@ const mangaTypesRoutes = require("./routes/manga.types.routes");
 const commentRoutes = require("./routes/comment.routes");
 const bookmarkRoutes = require("./routes/bookmark.routes");
 const userRoutes = require("./routes/user.routes");
+const applicationRoutes = require("./routes/application.routes");
 
 const allowedOrigins = [
   "https://uzmanga-auth.vercel.app",
@@ -71,6 +72,7 @@ app.use("/api/v1/manga-types", mangaTypesRoutes);
 app.use("/api/v1/comments", commentRoutes);
 app.use("/api/v1/bookmarks", bookmarkRoutes);
 app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/applications", applicationRoutes);
 
 // --- Catch errors (404) ---
 app.use((req, res, next) => {

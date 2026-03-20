@@ -19,6 +19,9 @@ exports.createManga = async (req, res, next) => {
   try {
     let {
       title,
+      metaTitle,
+      metaDescription,
+      metaKeywords,
       categories,
       genres,
       type,
@@ -26,6 +29,10 @@ exports.createManga = async (req, res, next) => {
       status,
       translationStatus,
       releaseYear,
+      enTitle,
+      ruTitle,
+      romajiTitle,
+      nativeTitle,
       slug: customSlug,
       ...mangaData
     } = req.body;
@@ -37,6 +44,10 @@ exports.createManga = async (req, res, next) => {
       typeof categories === "string" ? JSON.parse(categories) : categories;
     const parsedGenres =
       typeof genres === "string" ? JSON.parse(genres) : genres;
+    const parsedKeywords =
+      typeof metaKeywords === "string"
+        ? JSON.parse(metaKeywords)
+        : metaKeywords;
 
     // 3. Slug tekshiruvi
     const finalSlug = mangaUtils.generateSlug(title, customSlug);
@@ -85,6 +96,17 @@ exports.createManga = async (req, res, next) => {
       createdBy: requestUser,
       publishers: [requestUser],
       releaseYear: parseInt(releaseYear), // FormData string qaytargani uchun parseint shart
+      alternativeTitles: {
+        en: enTitle || "",
+        ru: ruTitle || "",
+        romaji: romajiTitle || "",
+        native: nativeTitle || "",
+      },
+      seo: {
+        keywords: parsedKeywords || [],
+        title: metaTitle || "",
+        description: metaDescription || "",
+      },
     });
 
     // 7. Servis orqali rasmlarni yuklash
@@ -102,7 +124,19 @@ exports.createManga = async (req, res, next) => {
 exports.updateManga = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { categories, genres, slug: newSlugInput, ...updateData } = req.body;
+    const {
+      categories,
+      metaTitle,
+      metaDescription,
+      metaKeywords,
+      genres,
+      enTitle,
+      ruTitle,
+      romajiTitle,
+      nativeTitle,
+      slug: newSlugInput,
+      ...updateData
+    } = req.body;
 
     const manga = await Manga.findById(id).populate(
       "images.cover images.banner",
@@ -139,6 +173,29 @@ exports.updateManga = async (req, res, next) => {
         mangaService.updateMangaImage(manga, req.files, "BANNER"),
       ]);
       manga.images = { cover: newCoverId, banner: newBannerId };
+    }
+
+    if (metaTitle || metaDescription || metaKeywords) {
+      const parsedKeywords =
+        typeof metaKeywords === "string"
+          ? JSON.parse(metaKeywords)
+          : metaKeywords;
+      manga.seo = {
+        ...manga.seo,
+        title: metaTitle || manga.seo.title,
+        description: metaDescription || manga.seo.description,
+        keywords: parsedKeywords || manga.seo.keywords,
+      };
+    }
+
+    if (enTitle || ruTitle || romajiTitle || nativeTitle) {
+      manga.alternativeTitles = {
+        ...manga.alternativeTitles,
+        en: enTitle || manga.alternativeTitles.en,
+        ru: ruTitle || manga.alternativeTitles.ru,
+        romaji: romajiTitle || manga.alternativeTitles.romaji,
+        native: nativeTitle || manga.alternativeTitles.native,
+      };
     }
 
     const allowed = [
@@ -401,7 +458,13 @@ exports.getLatestUpdates = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 20;
 
-    const latestMangas = await Manga.find()
+    // So'rovga filtr qo'shamiz: lastChapter mavjud bo'lsin va null bo'lmasin
+    const query = {
+      lastChapter: { $exists: true, $ne: null },
+      "lastChapter.publishedAt": { $exists: true }, //publishedAt borligiga ishonch hosil qilish
+    };
+
+    const latestMangas = await Manga.find(query) // Filtrni shu yerga beramiz
       .sort({ "lastChapter.publishedAt": -1 })
       .limit(limit)
       .skip((page - 1) * limit)

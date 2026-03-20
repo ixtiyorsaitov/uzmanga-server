@@ -73,6 +73,10 @@ const mangaSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      uniqueViews: {
+        type: Number,
+        default: 0,
+      },
       chapters: {
         type: Number,
         default: 0,
@@ -88,18 +92,18 @@ const mangaSchema = new mongoose.Schema(
       chapterId: { type: mongoose.Schema.Types.ObjectId, ref: "Chapter" },
       chapterNumber: Number,
       volumeNumber: Number,
-      publishedAt: { type: Date, default: Date.now },
+      publishedAt: { type: Date },
     },
     seo: {
-      metaTitle: {
+      title: {
         type: String,
         maxLength: [60, "Meta title 60 ta belgidan oshmasligi kerak"],
       },
-      metaDescription: {
+      description: {
         type: String,
         maxLength: [160, "Meta description 160 ta belgidan oshmasligi kerak"],
       },
-      focusKeywords: [{ type: String }], // Qidiruv uchun asosiy kalit so'zlar
+      keywords: [{ type: String }], // Qidiruv uchun asosiy kalit so'zlar
     },
   },
   { timestamps: true },
