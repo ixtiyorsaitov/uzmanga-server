@@ -1,7 +1,67 @@
 const Media = require("../models/Media");
+const Manga = require("../models/Manga");
+const mangaUtils = require("../utils/manga.utils");
+const Category = require("../models/Category");
+const Genre = require("../models/Genre");
+const MangaType = require("../models/MangaType");
+const AgeRating = require("../models/AgeRating");
+const MangaStatus = require("../models/MangaStatus");
+const TranslationStatus = require("../models/TranslationStatus");
 const Chapter = require("../models/Chapter");
 const { uploadService, uploadFolders } = require("./upload.service");
 const chapterService = require("../services/chapter.service");
+
+exports.checkSlugUniqueness = async (slug) => {
+  const existing = await Manga.findOne({ slug });
+  if (existing)
+    throw new Error("Ushbu slug band yoki ariza sifatida yuborilgan.");
+};
+
+exports.validateMangaRelations = async (data) => {
+  const [
+    categoryIds,
+    genreIds,
+    validatedType,
+    validatedAge,
+    validatedStatus,
+    validatedTransStatus,
+  ] = await Promise.all([
+    mangaUtils.parseAndValidateIds(Category, data.categories),
+    mangaUtils.parseAndValidateIds(Genre, data.genres),
+    mangaUtils.checkExists(MangaType, data.type, "Manga turi"),
+    mangaUtils.checkExists(AgeRating, data.ageRating, "Yosh reytingi"),
+    mangaUtils.checkExists(MangaStatus, data.status, "Manga statusi"),
+    mangaUtils.checkExists(
+      TranslationStatus,
+      data.translationStatus,
+      "Tarjima statusi",
+    ),
+  ]);
+
+  return {
+    categories: categoryIds,
+    genres: genreIds,
+    type: validatedType,
+    ageRating: validatedAge,
+    status: validatedStatus,
+    translationStatus: validatedTransStatus,
+    releaseYear: parseInt(data.releaseYear),
+    alternativeTitles: {
+      en: data.enTitle || "",
+      ru: data.ruTitle || "",
+      romaji: data.romajiTitle || "",
+      native: data.nativeTitle || "",
+    },
+    seo: {
+      keywords:
+        typeof data.metaKeywords === "string"
+          ? JSON.parse(data.metaKeywords)
+          : data.metaKeywords,
+      title: data.metaTitle || "",
+      description: data.metaDescription || "",
+    },
+  };
+};
 
 exports.uploadMangaAssets = async (mangaId, files) => {
   const [coverUpload, bannerUpload] = await Promise.all([

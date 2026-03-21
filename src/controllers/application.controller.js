@@ -16,7 +16,9 @@ exports.getMyApplications = async (req, res, next) => {
       }
     }
 
-    const applications = await Application.find(query).sort({ createdAt: -1 });
+    const applications = await Application.find(query)
+      .sort({ createdAt: -1 })
+      .populate("manga", "title slug images.cover");
 
     return ApiResponse.success(res, applications, "Arizalar topildi", 200);
   } catch (error) {
@@ -26,6 +28,18 @@ exports.getMyApplications = async (req, res, next) => {
 
 exports.submitTranslatorApplication = async (req, res, next) => {
   try {
+    if (
+      req.user.role === "admin" ||
+      req.user.role === "moderator" ||
+      req.user.role === "translator"
+    ) {
+      return ApiResponse.error(
+        res,
+        "Sizda allaqachon tarjimonlik huquqlari bor",
+        403,
+      );
+    }
+
     const existingApp = await Application.findOne({
       user: req.user.id,
       status: "pending",
@@ -232,7 +246,22 @@ exports.reviewTranslatorApplication = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const application = await Application.findById(id);
+    const application = await Application.findById(id).populate("user", "role");
+
+    if (
+      application.user.role === "admin" ||
+      application.user.role === "moderator"
+    ) {
+      return ApiResponse.error(res, "Siz bu amalni bajara olmaysiz", 403);
+    }
+
+    if (application.user.toString() === req.user.id) {
+      return ApiResponse.error(
+        res,
+        "Siz o'zingizni arizangizni ko'rib chiqa olmaysiz",
+        403,
+      );
+    }
 
     if (!application) {
       return ApiResponse.error(res, "Ariza topilmadi", 404);

@@ -11,112 +11,64 @@ const Chapter = require("../models/Chapter");
 const ReadingProgress = require("../models/ReadingProgress");
 const ViewLog = require("../models/ViewLog");
 const mangaUtils = require("../utils/manga.utils");
+const applicationService = require("../services/application.service");
 const mangaService = require("../services/manga.service");
 const ApiResponse = require("../utils/response");
 const { recordUniversalView } = require("../services/viewlog.service");
 
 exports.createManga = async (req, res, next) => {
   try {
-    let {
-      title,
-      metaTitle,
-      metaDescription,
-      metaKeywords,
-      categories,
-      genres,
-      type,
-      ageRating,
-      status,
-      translationStatus,
-      releaseYear,
-      enTitle,
-      ruTitle,
-      romajiTitle,
-      nativeTitle,
-      slug: customSlug,
-      ...mangaData
-    } = req.body;
+    const requestUser = req.user;
+    const isAdminOrMod = ["admin", "moderator"].includes(requestUser.role);
 
-    const requestUser = req.user._id;
+    // 1. Ma'lumotlarni tayyorlash va Moderatsiya holatini aniqlash
+    const { messageToModerator, ...bodyData } = req.body;
 
-    // 2. String bo'lib kelgan massivlarni parse qilish (Agar kerak bo'lsa)
-    const parsedCategories =
-      typeof categories === "string" ? JSON.parse(categories) : categories;
-    const parsedGenres =
-      typeof genres === "string" ? JSON.parse(genres) : genres;
-    const parsedKeywords =
-      typeof metaKeywords === "string"
-        ? JSON.parse(metaKeywords)
-        : metaKeywords;
+    // Agar admin bo'lsa body'dan kelgan statusni oladi, bo'lmasa doim 'pending'
+    const isPublished = isAdminOrMod ? req.body.isPublished || false : false;
 
-    // 3. Slug tekshiruvi
-    const finalSlug = mangaUtils.generateSlug(title, customSlug);
-    const existingSlug = await Manga.findOne({ slug: finalSlug });
-    if (existingSlug) {
-      return ApiResponse.error(res, "Ushbu slug band.", 400);
-    }
+    // 2. Slug va Takrorlanishni tekshirish
+    const finalSlug = mangaUtils.generateSlug(bodyData.title, bodyData.slug);
+    await mangaService.checkSlugUniqueness(finalSlug);
 
-    // 4. Fayllar (FormData orqali kelgan rasmllar)
+    // 3. Rasmlar borligini tekshirish
     if (!req.files?.cover || !req.files?.banner) {
-      return ApiResponse.error(res, "Cover va banner yuklanishi shart", 400);
+      return ApiResponse.error(res, "Muqova va banner yuklanishi shart", 400);
     }
 
-    // 5. Validatsiya (Oldingi javobdagi mantiq)
-    const [
-      categoryIds,
-      genreIds,
-      validatedType,
-      validatedAge,
-      validatedStatus,
-      validatedTransStatus,
-    ] = await Promise.all([
-      mangaUtils.parseAndValidateIds(Category, parsedCategories),
-      mangaUtils.parseAndValidateIds(Genre, parsedGenres),
-      mangaUtils.checkExists(MangaType, type, "Manga turi"),
-      mangaUtils.checkExists(AgeRating, ageRating, "Yosh reytingi"),
-      mangaUtils.checkExists(MangaStatus, status, "Manga statusi"),
-      mangaUtils.checkExists(
-        TranslationStatus,
-        translationStatus,
-        "Tarjima statusi",
-      ),
-    ]);
+    // 4. ID larni validatsiya qilish (Category, Genre, Type va h.k.)
+    const validatedData = await mangaService.validateMangaRelations(bodyData);
 
-    // 6. Saqlash
+    // 5. Mangani bazada yaratish
     const manga = await Manga.create({
-      ...mangaData,
-      title,
+      ...bodyData,
+      ...validatedData,
       slug: finalSlug,
-      type: validatedType,
-      ageRating: validatedAge,
-      status: validatedStatus,
-      translationStatus: validatedTransStatus,
-      categories: categoryIds,
-      genres: genreIds,
-      createdBy: requestUser,
-      publishers: [requestUser],
-      releaseYear: parseInt(releaseYear), // FormData string qaytargani uchun parseint shart
-      alternativeTitles: {
-        en: enTitle || "",
-        ru: ruTitle || "",
-        romaji: romajiTitle || "",
-        native: nativeTitle || "",
-      },
-      seo: {
-        keywords: parsedKeywords || [],
-        title: metaTitle || "",
-        description: metaDescription || "",
-      },
+      isPublished,
+      approvedBy: isAdminOrMod ? requestUser._id : null,
+      createdBy: requestUser._id,
+      publishers: [requestUser._id],
     });
 
-    // 7. Servis orqali rasmlarni yuklash
+    // 6. Rasmlarni yuklash (Storage servis orqali)
     const images = await mangaService.uploadMangaAssets(manga._id, req.files);
     manga.images = images;
     await manga.save();
 
-    return ApiResponse.success(res, manga, "Manga yaratildi", 201);
+    // 7. AGAR USER TRANSLATOR BO'LSA: Ariza (Application) yaratish
+    if (!isAdminOrMod) {
+      await applicationService.createMangaApplication({
+        userId: requestUser._id,
+        message: messageToModerator,
+        mangaId: manga._id,
+      });
+    }
+
+    const message = isAdminOrMod
+      ? "Manga muvaffaqiyatli yaratildi"
+      : "Manga yaratish uchun ariza yuborildi";
+    return ApiResponse.success(res, manga, message, 201);
   } catch (error) {
-    console.log(error);
     next(error);
   }
 };
@@ -124,12 +76,32 @@ exports.createManga = async (req, res, next) => {
 exports.updateManga = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const requestUser = req.user;
+    const isAdminOrMod = ["admin", "moderator"].includes(requestUser.role);
+
+    // 1. Mangani bazadan izlash
+    const manga = await Manga.findById(id).populate(
+      "images.cover images.banner",
+    );
+    if (!manga) return ApiResponse.error(res, "Manga topilmadi", 404);
+
+    // 2. Ruxsatlarni tekshirish (Faqat egasi yoki Admin/Moderator tahrirlay oladi)
+    const isOwner = manga.createdBy.toString() === requestUser._id.toString();
+    if (!isOwner && !isAdminOrMod) {
+      return ApiResponse.error(
+        res,
+        "Sizda bu mangani tahrirlash uchun ruxsat yo'q",
+        403,
+      );
+    }
+
     const {
+      isPublished,
       categories,
+      genres,
       metaTitle,
       metaDescription,
       metaKeywords,
-      genres,
       enTitle,
       ruTitle,
       romajiTitle,
@@ -138,67 +110,95 @@ exports.updateManga = async (req, res, next) => {
       ...updateData
     } = req.body;
 
-    const manga = await Manga.findById(id).populate(
-      "images.cover images.banner",
-    );
-    if (!manga) return ApiResponse.error(res, "Manga topilmadi", 404);
-
-    if (manga.createdBy.toString() !== req.user._id.toString()) {
-      return ApiResponse.error(res, "Ruxsat yo'q", 403);
-    }
-
+    // 4. Slug'ni yangilash va takrorlanishni tekshirish
     if (newSlugInput) {
-      const finalSlug = mangaUtils.generateSlug("", newSlugInput);
+      // Yangi title bo'lsa shundan, yo'qsa eskisidan slug yasaladi
+      const titleToSlugify = updateData.title || manga.title;
+      const finalSlug = mangaUtils.generateSlug(titleToSlugify, newSlugInput);
+
       if (finalSlug !== manga.slug) {
         const duplicate = await Manga.findOne({
           slug: finalSlug,
-          _id: { $ne: id },
+          _id: { $ne: id }, // Faqat isPublished emas, hamma mangalardan qidiramiz
         });
         if (duplicate) return ApiResponse.error(res, "Ushbu slug band", 400);
         manga.slug = finalSlug;
       }
     }
 
-    if (categories)
+    // 5. Admin / Moderator uchun isPublished'ni yangilash
+    if (isAdminOrMod && isPublished !== undefined) {
+      // String bo'lib kelishi mumkinligini inobatga olib boolean ga o'tkazamiz
+      const publishedStatus = isPublished === "true" || isPublished === true;
+      manga.isPublished = publishedStatus;
+
+      // Agar tasdiqlanayotgan bo'lsa, kim tasdiqlaganini yozib qo'yamiz
+      if (publishedStatus && !manga.approvedBy) {
+        manga.approvedBy = requestUser._id;
+      }
+    }
+
+    // 6. Kategoriya va Janrlarni yangilash (mangaUtils orqali)
+    if (categories) {
       manga.categories = await mangaUtils.parseAndValidateIds(
         Category,
         categories,
       );
-    if (genres)
+    }
+    if (genres) {
       manga.genres = await mangaUtils.parseAndValidateIds(Genre, genres);
+    }
 
-    if (req.files) {
+    // 7. Rasmlarni yangilash
+    if (req.files && (req.files.cover || req.files.banner)) {
       const [newCoverId, newBannerId] = await Promise.all([
-        mangaService.updateMangaImage(manga, req.files, "COVER"),
-        mangaService.updateMangaImage(manga, req.files, "BANNER"),
+        req.files.cover
+          ? mangaService.updateMangaImage(manga, req.files, "COVER")
+          : Promise.resolve(manga.images?.cover),
+        req.files.banner
+          ? mangaService.updateMangaImage(manga, req.files, "BANNER")
+          : Promise.resolve(manga.images?.banner),
       ]);
       manga.images = { cover: newCoverId, banner: newBannerId };
     }
 
+    // 8. SEO va Alternativ nomlarni yangilash
     if (metaTitle || metaDescription || metaKeywords) {
       const parsedKeywords =
         typeof metaKeywords === "string"
           ? JSON.parse(metaKeywords)
           : metaKeywords;
+
       manga.seo = {
         ...manga.seo,
-        title: metaTitle || manga.seo.title,
-        description: metaDescription || manga.seo.description,
-        keywords: parsedKeywords || manga.seo.keywords,
+        title: metaTitle !== undefined ? metaTitle : manga.seo.title,
+        description:
+          metaDescription !== undefined
+            ? metaDescription
+            : manga.seo.description,
+        keywords:
+          parsedKeywords !== undefined ? parsedKeywords : manga.seo.keywords,
       };
     }
 
     if (enTitle || ruTitle || romajiTitle || nativeTitle) {
       manga.alternativeTitles = {
         ...manga.alternativeTitles,
-        en: enTitle || manga.alternativeTitles.en,
-        ru: ruTitle || manga.alternativeTitles.ru,
-        romaji: romajiTitle || manga.alternativeTitles.romaji,
-        native: nativeTitle || manga.alternativeTitles.native,
+        en: enTitle !== undefined ? enTitle : manga.alternativeTitles.en,
+        ru: ruTitle !== undefined ? ruTitle : manga.alternativeTitles.ru,
+        romaji:
+          romajiTitle !== undefined
+            ? romajiTitle
+            : manga.alternativeTitles.romaji,
+        native:
+          nativeTitle !== undefined
+            ? nativeTitle
+            : manga.alternativeTitles.native,
       };
     }
 
-    const allowed = [
+    // 9. Asosiy maydonlarni (Primitive data types) yangilash
+    const allowedFields = [
       "title",
       "description",
       "type",
@@ -207,7 +207,8 @@ exports.updateManga = async (req, res, next) => {
       "status",
       "translationStatus",
     ];
-    allowed.forEach((field) => {
+
+    allowedFields.forEach((field) => {
       if (updateData[field] !== undefined) {
         manga[field] =
           field === "releaseYear"
@@ -216,8 +217,15 @@ exports.updateManga = async (req, res, next) => {
       }
     });
 
+    // 10. Saqlash va javob qaytarish
     await manga.save();
-    return ApiResponse.success(res, manga, "Manga yangilandi", 200);
+
+    return ApiResponse.success(
+      res,
+      manga,
+      "Manga muvaffaqiyatli yangilandi",
+      200,
+    );
   } catch (error) {
     next(error);
   }
@@ -259,7 +267,9 @@ exports.getAllMangas = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit) || 12, 50);
     const skip = (page - 1) * limit;
 
-    const mangas = await Manga.find()
+    const mangas = await Manga.find({
+      isPublished: true,
+    })
       .select("title status releaseYear images slug")
       .populate({
         path: "images.cover",
@@ -292,11 +302,11 @@ exports.getManga = async (req, res, next) => {
 
     const isId = mongoose.Types.ObjectId.isValid(identifier);
 
-    const userId = req.user ? req.user._id : null;
+    const userId = req.user ? req.user._id.toString() : null;
 
-    const query = isId
-      ? Manga.findById(identifier)
-      : Manga.findOne({ slug: identifier });
+    const query = Manga.findOne(
+      isId ? { _id: identifier } : { slug: identifier },
+    );
 
     const manga = await query
       .populate({
@@ -314,6 +324,22 @@ exports.getManga = async (req, res, next) => {
 
     if (!manga) {
       return ApiResponse.error(res, "Manga topilmadi", 404);
+    }
+
+    if (!manga.isPublished) {
+      const creatorId = manga.createdBy._id.toString();
+      const userRole = req.user?.role;
+
+      const hasAccess =
+        userId === creatorId ||
+        userRole === "admin" ||
+        userRole === "moderator";
+
+      console.log(hasAccess);
+
+      if (!hasAccess) {
+        return ApiResponse.error(res, "Manga topilmadi", 404);
+      }
     }
 
     recordUniversalView(req, manga._id.toString(), "Manga").catch((err) =>
@@ -458,13 +484,13 @@ exports.getLatestUpdates = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 20;
 
-    // So'rovga filtr qo'shamiz: lastChapter mavjud bo'lsin va null bo'lmasin
     const query = {
       lastChapter: { $exists: true, $ne: null },
-      "lastChapter.publishedAt": { $exists: true }, //publishedAt borligiga ishonch hosil qilish
+      "lastChapter.publishedAt": { $exists: true },
+      moderationStatus: "published",
     };
 
-    const latestMangas = await Manga.find(query) // Filtrni shu yerga beramiz
+    const latestMangas = await Manga.find(query)
       .sort({ "lastChapter.publishedAt": -1 })
       .limit(limit)
       .skip((page - 1) * limit)

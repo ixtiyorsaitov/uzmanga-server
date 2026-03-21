@@ -12,14 +12,9 @@ const applicationSchema = new mongoose.Schema(
     },
     portfolioLink: {
       type: String,
-      required: [
-        true,
-        "Tarjima namunangizga havola (Google Drive/Telegram) yuboring",
-      ],
     },
     experience: {
       type: String,
-      required: [true, "Tajribangiz haqida qisqacha ma'lumot bering"],
     },
     status: {
       type: String,
@@ -30,6 +25,10 @@ const applicationSchema = new mongoose.Schema(
       type: String,
       enum: ["translator", "create-manga"],
       required: true,
+    },
+    manga: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Manga",
     },
     adminComment: {
       type: String,

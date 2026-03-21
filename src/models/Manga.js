@@ -38,6 +38,15 @@ const mangaSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "TranslationStatus",
     },
+    isPublished: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     genres: [{ type: mongoose.Schema.Types.ObjectId, ref: "Genre" }],
     translators: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],

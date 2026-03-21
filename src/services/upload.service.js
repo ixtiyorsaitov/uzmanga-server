@@ -12,7 +12,6 @@ const uploadFolders = {
     folders: {
       MANGA_COVERS: "manga_covers",
       MANGA_BANNERS: "manga_banners",
-      MANGA_CHAPTERS: "manga_chapters",
     },
   },
   MANGA_CHAPTERS: {

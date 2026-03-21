@@ -124,7 +124,9 @@ exports.createChapter = async (req, res, next) => {
 
     if (!chapterNumber) return ApiResponse.error(res, "Bob raqami shart", 400);
 
-    const manga = await Manga.findById(mangaId)
+    const manga = await Manga.findOne({
+      _id: mangaId,
+    })
       .select("createdBy translators")
       .lean();
 
@@ -137,6 +139,11 @@ exports.createChapter = async (req, res, next) => {
       return ApiResponse.error(res, "Ruxsat yo'q", 403);
     }
 
+    if (!manga.isPublished) {
+      if (!manga.approvedBy) {
+        return ApiResponse.error(res, "Manga tasdiqlanmagan", 403);
+      }
+    }
     const existChapter = await Chapter.findOne({ chapterNumber }).lean();
     if (existChapter) {
       return ApiResponse.error(res, "Ushbu raqamli bob allaqachon mavjud", 400);

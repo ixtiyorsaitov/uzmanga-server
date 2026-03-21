@@ -7,7 +7,6 @@ const {
   optionalProtect,
 } = require("../middlewares/auth.middleware");
 const mangaController = require("../controllers/manga.controller");
-const chapterController = require("../controllers/chapter.controller"); // Ajratilgan controller
 const upload = require("../middlewares/upload.middleware");
 
 // --- PUBLIC ROUTES ---
@@ -26,7 +25,7 @@ router.post("/type", mangaController.createMangaType);
 router.post(
   "/",
   protect,
-  // restrictTo("admin"),
+  restrictTo("admin", "moderator", "translator"),
   upload.fields([
     { name: "cover", maxCount: 1 },
     { name: "banner", maxCount: 1 },
@@ -37,6 +36,7 @@ router.post(
 router.put(
   "/:id",
   protect,
+  restrictTo("admin", "moderator", "translator"),
   upload.fields([
     { name: "cover", maxCount: 1 },
     { name: "banner", maxCount: 1 },
@@ -44,6 +44,11 @@ router.put(
   mangaController.updateManga,
 );
 
-router.delete("/:id", mangaController.deleteManga);
+router.delete(
+  "/:id",
+  protect,
+  restrictTo("admin", "moderator", "translator"),
+  mangaController.deleteManga,
+);
 
 module.exports = router;
